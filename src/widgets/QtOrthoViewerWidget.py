@@ -1,0 +1,233 @@
+import vtk
+from PyQt5 import QtWidgets, QtCore
+from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+
+from src.model.VolumeRenderModel import VolumeRender
+from src.model.BaseModel import BaseModel
+
+
+class QtOrthoViewer:
+
+    def __init__(self, baseModelClass: BaseModel, widget, label):
+        super(QtOrthoViewer, self).__init__()
+
+        # self.orientation = orientation
+        # print("self.orientation:",self.orientation)
+        # self.widget = widget
+        self.label = label
+        print("self.label:", self.label)
+
+        self.current_slice = 0
+        self.min_slice = 0
+        self.max_slice = 0
+        self.labelsPositions = [
+            [0.05, 0.5],
+            [0.95, 0.5],
+            [0.5, 0.05],
+            [0.5, 0.9]
+        ]
+
+        # # Image Window Level
+        # self.imageWindowLevel = baseModelClass.imageWindowLevel
+        #
+        # # Image Shift Scale
+        # self.imageShiftScale = baseModelClass.imageShiftScale
+
+        # Reader
+        self.reader = baseModelClass.imageReader
+
+        self.frame = QtWidgets.QFrame()
+        self.frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.frame.setFrameShadow(QtWidgets.QFrame.Raised)
+
+        self.widget = QVTKRenderWindowInteractor(self.frame)
+
+        self.renderer = vtk.vtkRenderer()
+
+        self.renderWindow = self.widget.GetRenderWindow()
+        self.renderWindow.SetMultiSamples(0)
+        self.renderWindow.AddRenderer(self.renderer)
+
+        # Render Window Interactor
+        self.renderWindowInteractor = self.widget.GetRenderWindow().GetInteractor()
+
+        # Interactor Style Image and Events
+        # self.interactorStyleImage = vtk.vtkInteractorStyleImage()
+        # self.interactorStyleImage.SetInteractor(self.renderWindowInteractor)
+        # self.interactorStyleImage.SetInteractionModeToImageSlicing()
+        # self.renderWindowInteractor.SetInteractorStyle(self.interactorStyleImage)
+
+        # Picker
+        self.picker = baseModelClass.picker
+
+        # ImageSliceViewer
+        self.viewer = vtk.vtkResliceImageViewer()
+
+        # ResliceCursorWidget
+        self.resliceCursorWidget = self.viewer.GetResliceCursorWidget()
+
+        # ResliceCurosr
+        self.resliceCursor = self.viewer.GetResliceCursor()
+
+        # Camera
+        self.camera = self.viewer.GetRenderer().GetActiveCamera()
+        # self.camera.SetParallelScale(80)
+        # self.focalPoint = self.camera.GetFocalPoint()
+        # self.position = self.camera.GetPosition()
+        # print("focalPoint:",self.focalPoint)
+        # print("position:",self.position)
+
+        # imageView
+        self.imageView = vtk.vtkImageViewer2()
+
+        # Slider
+        self.slider = QtWidgets.QSlider()
+        self.slider.setOrientation(QtCore.Qt.Vertical)
+
+        # Slider label
+        self.slider_label = QtWidgets.QLabel()
+        self.slider_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter)
+        if self.label == "3D Viewer":
+            self.type = "Volume"
+            self.volume()
+        else:
+            self.imageView.SetInputData(self.reader.GetOutput())
+            self.imageView.SetupInteractor(self.widget)
+            self.imageView.SetRenderWindow(self.widget.GetRenderWindow())
+            if self.label == "Axial":
+                self.type = "XY"
+                self.imageView.SetSliceOrientationToXY()
+            elif self.label == "Sagittal":
+                self.type = "YZ"
+                self.imageView.SetSliceOrientationToYZ()
+            elif self.label == "Coronal":
+                self.type = "XZ"
+                self.imageView.SetSliceOrientationToXZ()
+            self.imageView.Render()
+        print("type:", self.type)
+
+    # def update_viewer(self):
+    #     type = None
+    #     if self.label == "Axial":
+    #         type = "XY"
+    #         self.imageView.SetSliceOrientationToXY()
+    #     elif self.label == "Sagittal":
+    #         type = "YZ"
+    #         self.imageView.SetSliceOrientationToYZ()
+    #     elif self.label == "Coronal":
+    #         type = "XZ"
+    #         self.imageView.SetSliceOrientationToXZ()
+    #     self.imageView.Render()
+    #     return type
+
+    # def update_viewer(self, viewer, vtkWidget, label, verticalSlider, id):
+    #     print("id_type:", id)
+    #     viewer.SetInputData(self.reader.GetOutput())
+    #     viewer.SetupInteractor(vtkWidget)
+    #     viewer.SetRenderWindow(vtkWidget.GetRenderWindow())
+    #     if id == "XY":
+    #         viewer.SetSliceOrientationToXY()
+    #     elif id == "YZ":
+    #         viewer.SetSliceOrientationToYZ()
+    #         transform_YZ = vtk.vtkTransform()
+    #         transform_YZ.Translate(self.center0, self.center1, self.center2)
+    #         transform_YZ.RotateX(180)
+    #         transform_YZ.RotateZ(180)
+    #         transform_YZ.Translate(-self.center0, -self.center1, -self.center2)
+    #         viewer.GetImageActor().SetUserTransform(transform_YZ)
+    #     elif id == "XZ":
+    #         viewer.SetSliceOrientationToXZ()
+    #         transform_XZ = vtk.vtkTransform()
+    #         transform_XZ.Translate(self.center0, self.center1, self.center2)
+    #         transform_XZ.RotateY(180)
+    #         transform_XZ.RotateZ(180)
+    #         transform_XZ.Translate(-self.center0, -self.center1, -self.center2)
+    #         viewer.GetImageActor().SetUserTransform(transform_XZ)
+    #     viewer.Render()
+    #
+    #     camera = viewer.GetRenderer().GetActiveCamera()
+    #     camera.ParallelProjectionOn()
+    #     camera.SetParallelScale(80)
+    #     focalPoint = camera.GetFocalPoint()
+    #     position = camera.GetPosition()
+    #
+    #     viewer.SliceScrollOnMouseWheelOff()
+    #     viewer.UpdateDisplayExtent()
+    #     viewer.Render()
+    #
+    #     wheelforward = MouseWheelForward(viewer, label, verticalSlider, id)
+    #     wheelbackward = MouseWheelBackWard(viewer, label, verticalSlider, id)
+    #     viewer_InteractorStyle = viewer.GetInteractorStyle()
+    #     viewer_InteractorStyle.AddObserver("MouseWheelForwardEvent", wheelforward)
+    #     viewer_InteractorStyle.AddObserver("MouseWheelBackwardEvent", wheelbackward)
+    #
+    #     value = viewer.GetSlice()
+    #     maxSlice = viewer.GetSliceMax()
+    #     verticalSlider.setMaximum(maxSlice)
+    #     verticalSlider.setMinimum(0)
+    #     verticalSlider.setSingleStep(1)
+    #     verticalSlider.setValue(value)
+    #     label.setText("Slice %d/%d" % (verticalSlider.value(), maxSlice))
+    #     viewer.Render()
+    #
+    #     return focalPoint, position
+
+
+    def volume(self):
+        # 创建体绘制映射器
+        volumeMapper = vtk.vtkGPUVolumeRayCastMapper()  # 提高渲染性能
+        volumeMapper.SetInputConnection(self.reader.GetOutputPort())
+
+        # 设置体绘制颜色
+        color_transfer_function = vtk.vtkColorTransferFunction()
+        color_transfer_function.AddRGBPoint(0, 0.0, 0.0, 0.0)
+        color_transfer_function.AddRGBPoint(1000, 1.0, 0.5, 0.3)
+        color_transfer_function.AddRGBPoint(1500, 1.0, 0.5, 0.3)
+        color_transfer_function.AddRGBPoint(2000, 1.0, 0.7, 0.4)
+        color_transfer_function.AddRGBPoint(4000, 1.0, 1.0, 1.0)  # 4095
+
+        # 设置体绘制不透明度
+        opacity_transfer_function = vtk.vtkPiecewiseFunction()
+        opacity_transfer_function.AddPoint(0, 0.0)
+        opacity_transfer_function.AddPoint(900, 0.0)
+        opacity_transfer_function.AddPoint(1500, 0.3)
+        opacity_transfer_function.AddPoint(2000, 0.6)
+        opacity_transfer_function.AddPoint(4000, 0.9)  # 4095
+
+        # 添加体绘制光照效果
+        volumeProperty = vtk.vtkVolumeProperty()
+        volumeProperty.SetColor(color_transfer_function)
+        volumeProperty.SetScalarOpacity(opacity_transfer_function)
+        volumeProperty.ShadeOn()
+        volumeProperty.SetAmbient(0.5)
+        volumeProperty.SetDiffuse(0.7)
+        volumeProperty.SetSpecular(0.5)
+
+        # 创建体绘制对象
+        volume_cbct = vtk.vtkVolume()
+        volume_cbct.SetMapper(volumeMapper)
+        volume_cbct.SetProperty(volumeProperty)
+        # 添加体绘制到渲染器
+        # self.renderer = vtk.vtkRenderer()
+        self.renderer.SetBackground(0.5, 0.5, 0.5)
+        self.renderer.AddVolume(volume_cbct)
+        self.renderer.ResetCamera()
+        self.widget.GetRenderWindow().AddRenderer(self.renderer)
+
+        VolumeRender.volume_cbct = volume_cbct
+
+        style = vtk.vtkInteractorStyleTrackballCamera()  # 交互器样式的一种，该样式下，用户是通过控制相机对物体作旋转、放大、缩小等操作
+        style.SetDefaultRenderer(self.renderer)
+        style.EnabledOn()
+        self.renderWindowInteractor.SetInteractorStyle(style)
+        # ==================添加一个三维坐标指示=======================================
+        axesActor = vtk.vtkAxesActor()
+        axes = vtk.vtkOrientationMarkerWidget()
+        axes.SetOrientationMarker(axesActor)
+        axes.SetInteractor(self.renderWindowInteractor)
+        axes.EnabledOn()
+        axes.SetEnabled(1)
+        axes.InteractiveOff()
+        self.renderer.ResetCamera()
+        self.widget.Render()
+        self.renderWindowInteractor.Initialize()
