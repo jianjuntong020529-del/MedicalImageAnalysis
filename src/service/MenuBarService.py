@@ -982,39 +982,44 @@ class MenuBarService:
         color_transfer_function = vtk.vtkColorTransferFunction()
 
         if DataAndModelType.DATA_TYPE == "NPY" or DataAndModelType.DATA_TYPE is None:
-            # NPY数据可能有不同的标量范围，使用相对值
+            # NPY 数据标量范围不固定，使用相对比例映射颜色
             range_span = data_max - data_min
-            color_transfer_function.AddRGBPoint(data_min, 0.0, 0.0, 0.0)
-            color_transfer_function.AddRGBPoint(data_min + 0.25 * range_span, 1.0, 0.5, 0.3)
-            color_transfer_function.AddRGBPoint(data_min + 0.5 * range_span, 1.0, 0.5, 0.3)
-            color_transfer_function.AddRGBPoint(data_min + 0.75 * range_span, 1.0, 0.7, 0.4)
-            color_transfer_function.AddRGBPoint(data_max, 1.0, 1.0, 1.0)
+            color_transfer_function.AddRGBPoint(data_min,                        0.0, 0.0, 0.0)   # 最小值：黑色
+            color_transfer_function.AddRGBPoint(data_min + 0.25 * range_span,   1.0, 0.5, 0.3)   # 25%：肉色
+            color_transfer_function.AddRGBPoint(data_min + 0.5  * range_span,   1.0, 0.5, 0.3)   # 50%：肉色
+            color_transfer_function.AddRGBPoint(data_min + 0.75 * range_span,   1.0, 0.7, 0.4)   # 75%：米黄
+            color_transfer_function.AddRGBPoint(data_max,                        1.0, 1.0, 1.0)   # 最大值：白色
         else:
-            # DICOM数据使用固定值
-            color_transfer_function.AddRGBPoint(0, 0.0, 0.0, 0.0)
-            color_transfer_function.AddRGBPoint(1000, 1.0, 0.5, 0.3)
-            color_transfer_function.AddRGBPoint(1500, 1.0, 0.5, 0.3)
-            color_transfer_function.AddRGBPoint(2000, 1.0, 0.7, 0.4)
-            color_transfer_function.AddRGBPoint(4000, 1.0, 1.0, 1.0)  # 4095
+            # DICOM/CBCT 数据使用口腔牙齿专用颜色映射（HU 值）
+            color_transfer_function.AddRGBPoint(-1000, 0.0, 0.0, 0.0)    # 空气：黑色透明
+            color_transfer_function.AddRGBPoint(-200,  0.8, 0.6, 0.5)    # 软组织：肉色
+            color_transfer_function.AddRGBPoint(200,   0.9, 0.75, 0.55)  # 牙槽骨：米黄色
+            color_transfer_function.AddRGBPoint(700,   1.0, 0.95, 0.85)  # 牙本质：象牙白
+            color_transfer_function.AddRGBPoint(1500,  1.0, 1.0,  1.0)   # 牙釉质：纯白
+            color_transfer_function.AddRGBPoint(3000,  1.0, 1.0,  1.0)   # 高密度：纯白
 
         # 设置体绘制不透明度 - 根据数据范围自适应
         opacity_transfer_function = vtk.vtkPiecewiseFunction()
 
         if DataAndModelType.DATA_TYPE == "NPY" or DataAndModelType.DATA_TYPE is None:
-            # NPY数据使用相对透明度设置
+            # NPY 数据使用相对透明度设置
             range_span = data_max - data_min
-            opacity_transfer_function.AddPoint(data_min, 0.0)
-            opacity_transfer_function.AddPoint(data_min + 0.2 * range_span, 0.0)
-            opacity_transfer_function.AddPoint(data_min + 0.5 * range_span, 0.3)
-            opacity_transfer_function.AddPoint(data_min + 0.75 * range_span, 0.6)
-            opacity_transfer_function.AddPoint(data_max, 0.9)
+            opacity_transfer_function.AddPoint(data_min,                       0.0)   # 最小值：完全透明
+            opacity_transfer_function.AddPoint(data_min + 0.2 * range_span,   0.0)   # 20%：透明
+            opacity_transfer_function.AddPoint(data_min + 0.5 * range_span,   0.3)   # 50%：半透明
+            opacity_transfer_function.AddPoint(data_min + 0.75 * range_span,  0.6)   # 75%：较不透明
+            opacity_transfer_function.AddPoint(data_max,                       0.9)   # 最大值：近不透明
         else:
-            # DICOM数据使用固定值
-            opacity_transfer_function.AddPoint(0, 0.0)
-            opacity_transfer_function.AddPoint(900, 0.0)
-            opacity_transfer_function.AddPoint(1500, 0.3)
-            opacity_transfer_function.AddPoint(2000, 0.6)
-            opacity_transfer_function.AddPoint(4000, 0.9)  # 4095
+            # DICOM/CBCT 数据使用口腔牙齿专用透明度映射（HU 值）
+            opacity_transfer_function.AddPoint(-1000, 0.0)    # 空气：完全透明
+            opacity_transfer_function.AddPoint(-200,  0.0)    # 软组织边界：透明
+            opacity_transfer_function.AddPoint(0,     0.03)   # 软组织：微透明（可见轮廓）
+            opacity_transfer_function.AddPoint(200,   0.0)    # 软组织与骨交界：透明过渡
+            opacity_transfer_function.AddPoint(400,   0.08)   # 松质骨：轻微不透明
+            opacity_transfer_function.AddPoint(700,   0.35)   # 皮质骨/牙槽骨：半透明
+            opacity_transfer_function.AddPoint(1000,  0.65)   # 牙本质：较不透明
+            opacity_transfer_function.AddPoint(1500,  0.85)   # 牙釉质：高度不透明
+            opacity_transfer_function.AddPoint(3000,  0.95)   # 高密度硬组织：几乎不透明
 
         # 添加体绘制光照效果
         volumeProperty = vtk.vtkVolumeProperty()
@@ -1056,6 +1061,13 @@ class MenuBarService:
         self.viewModel.VolumeOrthorViewer.renderer = renderer
 
         self.iren_Volume.Initialize()
+
+        # 通知体绘制工具栏绑定 VTK 对象
+        try:
+            if ToolBarWidget.volume_render_widget is not None:
+                ToolBarWidget.volume_render_widget.bind_vtk(volume_cbct, renderer, self.vtkWidget_Volume)
+        except Exception:
+            logger.debug("volume_render_widget bind_vtk failed", exc_info=True)
 
     def valuechange1(self):
         viewer_XY = self.viewModel.AxialOrthoViewer.viewer

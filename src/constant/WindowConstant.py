@@ -146,6 +146,9 @@ class WindowConstant:
     # NIfTI分割编辑
     ACTION_NIFTI_SEGMENTATION_EDITOR = "NIfTI分割结果编辑"
 
+    # 体绘制工具栏
+    ACTION_VOLUME_RENDER_TOOLBAR = "体绘制工具栏"
+
 
 
 

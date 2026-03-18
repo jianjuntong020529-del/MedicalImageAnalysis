@@ -11,3 +11,5 @@ class ToolBarWidget:
     parameters_widget = None
     # 标注工具栏
     annotation_widget = None
+    # 体绘制工具栏
+    volume_render_widget = None

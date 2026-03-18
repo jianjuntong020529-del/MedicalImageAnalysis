@@ -160,6 +160,12 @@ class Ui_MainWindow(object):
         self.tool_bar_layout.addWidget(self.annotationController.widget_labels)
         ToolBarWidget.annotation_widget = self.annotationController
 
+        # 体绘制工具栏
+        from src.controller.VolumeRenderController import VolumeRenderController
+        self.volumeRenderController = VolumeRenderController(self.OrthoViewerModel, self.widget)
+        self.tool_bar_layout.addWidget(self.volumeRenderController.widget_volume_render)
+        ToolBarWidget.volume_render_widget = self.volumeRenderController
+
         self.system_layout.addLayout(self.tool_bar_layout, 2)
 
         self.translateUi(QMainWindow)

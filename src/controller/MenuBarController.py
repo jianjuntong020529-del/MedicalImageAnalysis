@@ -91,6 +91,7 @@ class MenuBarController(MenuBarManager):
         self.actionAdd_Load_Universal_model.triggered.connect(self.on_actionAdd_Load_Universal_model)
         self.actionAdd_Load_Lungseg_model.triggered.connect(self.on_actionAdd_Load_Lungseg_model)
         self.action_nifti_segmentation_editor.triggered.connect(self.on_action_nifti_segmentation_editor)
+        self.action_volume_render_toolbar.triggered.connect(self.on_action_volume_render_toolbar)
         self.pointAction.triggered.connect(self.on_action_point)
         self.point_label_0.triggered.connect(self.select_point_label)
         self.point_label_1.triggered.connect(self.select_point_label)
@@ -907,6 +908,16 @@ class MenuBarController(MenuBarManager):
         from src.controller.SegmentationEditController import SegmentationEditController
         self._seg_edit_controller = SegmentationEditController(self.QMainWindow)
         self._seg_edit_controller.show_segmentation_editor()
+
+    def on_action_volume_render_toolbar(self):
+        """显示/隐藏体绘制工具栏"""
+        widget = ToolBarWidget.volume_render_widget
+        if widget is None:
+            return
+        if widget.isHidden():
+            widget.show()
+        else:
+            widget.hide()
 
     def on_action_generatePanormaic(self):
         print("全景图生成功能")
