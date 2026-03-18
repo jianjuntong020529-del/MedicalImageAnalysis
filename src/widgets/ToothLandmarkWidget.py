@@ -96,9 +96,13 @@ class ToothLandmarkWidget:
         self.pushButton_segmentation.setFont(Font.font_en)
         self.pushButton_segmentation.setAutoExclusive(False)
 
-        self.pushButton_loadSegmentationResult = QtWidgets.QPushButton(self.widget_labels)
-        self.pushButton_loadSegmentationResult.setFont(Font.font_en)
-        self.pushButton_loadSegmentationResult.setAutoExclusive(False)
+        self.pushButton_load_alveolar_segResult = QtWidgets.QPushButton(self.widget_labels)
+        self.pushButton_load_alveolar_segResult.setFont(Font.font_en)
+        self.pushButton_load_alveolar_segResult.setAutoExclusive(False)
+
+        self.pushButton_load_tooth_segResult = QtWidgets.QPushButton(self.widget_labels)
+        self.pushButton_load_tooth_segResult.setFont(Font.font_en)
+        self.pushButton_load_tooth_segResult.setAutoExclusive(False)
 
         self.retranslateUi()
 
@@ -113,6 +117,6 @@ class ToothLandmarkWidget:
         self.pushButton_load.setText(_translate("MainWindow", WindowConstant.TOOTH_LANDMARK_LOAD_BUTTON))
         self.pushButton_save.setText(_translate("MainWindow", WindowConstant.TOOTH_LANDMARK_SAVE_BUTTON))
         self.pushButton_segmentation.setText(_translate("MainWindow", WindowConstant.TOOTH_LANDMARK_Segmentation_BUTTON))
-        self.pushButton_loadSegmentationResult.setText(_translate("MainWindow", WindowConstant.TOOTH_LANDMARK_LOAD_RESULT_BUTTON))
-
+        self.pushButton_load_alveolar_segResult.setText(_translate("MainWindow", WindowConstant.TOOTH_LANDMARK_LOAD_ALVEOLAR_RESULT_BUTTON))
+        self.pushButton_load_tooth_segResult.setText(_translate("MainWindow", WindowConstant.TOOTH_LANDMARK_LOAD_TOOTH_RESULT_BUTTON))
 

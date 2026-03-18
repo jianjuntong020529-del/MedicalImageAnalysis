@@ -5,7 +5,7 @@
 from PyQt5 import QtWidgets, QtCore
 
 from src.constant.WindowConstant import WindowConstant
-from src.controller.MenuBarController import *
+from src.model.AnnotationEnableModel import AnnotationEnable
 from src.model.OrthoViewerModel import OrthoViewerModel
 from src.style.AppVisualStyle import APPVisualStyle
 from src.widgets.ContrastWidget import Contrast
@@ -47,8 +47,11 @@ class MenuBarManager:
         self.actionAdd_IM0BIM_Data = QtWidgets.QAction(self.QMainWindow)
         self.actionAdd_IM0BIM_Data.setObjectName("actionAdd_IM0BIM_Data")
 
-        self.actionAdd_Npy_Data = QtWidgets.QAction(self.QMainWindow)
-        self.actionAdd_Npy_Data.setObjectName("actionAdd_Npy_data")
+        self.actionAdd_NIFIT_Data = QtWidgets.QAction(self.QMainWindow)
+        self.actionAdd_NIFIT_Data.setObjectName("actionAdd_NIFIT_Data")
+
+        self.actionAdd_NPY_Data = QtWidgets.QAction(self.QMainWindow)
+        self.actionAdd_NPY_Data.setObjectName("actionAdd_NPY_Data")
 
         self.actionAdd_STL_Data = QtWidgets.QAction(self.QMainWindow)
         self.actionAdd_STL_Data.setObjectName("actionAdd_STL_Data")
@@ -59,6 +62,12 @@ class MenuBarManager:
 
         self.action_toothLandmark_annotation = QtWidgets.QAction(self.QMainWindow)
         self.action_toothLandmark_annotation.setObjectName("action_toothLandmark_annotation")
+
+        self.action_coronal_canal_annotation = QtWidgets.QAction(self.QMainWindow)
+        self.action_coronal_canal_annotation.setObjectName("action_coronal_canal_annotation")
+
+        self.action_nifti_segmentation_editor = QtWidgets.QAction(self.QMainWindow)
+        self.action_nifti_segmentation_editor.setObjectName("action_nifti_segmentation_editor")
 
 
         self.action_implant_toolbar = QtWidgets.QAction(self.QMainWindow)
@@ -158,14 +167,17 @@ class MenuBarManager:
 
         self.fileMenu.addAction(self.actionAdd_DiICOM_Data)
         self.fileMenu.addAction(self.actionAdd_IM0BIM_Data)
+        self.fileMenu.addAction(self.actionAdd_NIFIT_Data)
+        self.fileMenu.addAction(self.actionAdd_NPY_Data)
         self.fileMenu.addAction(self.actionAdd_STL_Data)
-        self.fileMenu.addAction(self.actionAdd_Npy_Data)
 
         self.toolMenu.addAction(self.action_generatePanormaic)
         self.toolMenu.addAction(self.action_toothLandmark_annotation)
+        self.toolMenu.addAction(self.action_coronal_canal_annotation)
         self.toolMenu.addAction(self.action_implant_toolbar)
         self.toolMenu.addAction(self.action_registration_toolbar)
         self.toolMenu.addAction(self.action_parameters_toolbar)
+        self.toolMenu.addAction(self.action_nifti_segmentation_editor)
 
         self.modelloadMenu.addAction(self.actionAdd_Load_Universal_model)
         self.modelloadMenu.addAction(self.actionAdd_Load_Lungseg_model)
@@ -174,8 +186,8 @@ class MenuBarManager:
         self.segmentation_menu.addMenu(self.point_label)
         self.segmentation_menu.addAction(self.labelBoxAction)
         self.segmentation_menu.addMenu(self.box_label)
-        self.segmentation_menu.addAction(self.startSegmentationAction)
         self.segmentation_menu.addMenu(self.segmentation_type)
+        self.segmentation_menu.addAction(self.startSegmentationAction)
         self.segmentation_menu.addAction(self.saveResultAction)
 
 
@@ -193,10 +205,12 @@ class MenuBarManager:
         self.segmentation_menu.setTitle(_translate("MainWindow", WindowConstant.SAM_MED2D_SEG))
         self.actionAdd_DiICOM_Data.setText(_translate("MainWindow", WindowConstant.ADD_DICOM))
         self.actionAdd_IM0BIM_Data.setText(_translate("MainWindow", WindowConstant.ADD_IM0))
+        self.actionAdd_NIFIT_Data.setText(_translate("MainWindow", WindowConstant.ADD_NIFIT))
+        self.actionAdd_NPY_Data.setText(_translate("MainWindow", WindowConstant.ADD_NPY))
         self.actionAdd_STL_Data.setText(_translate("MainWindow", WindowConstant.ADD_STL))
-        self.actionAdd_Npy_Data.setTest(_translate("MainWindow",WindowConstant.ADD_NPY))
         self.action_generatePanormaic.setText(_translate("MainWindow", WindowConstant.ACTION_GENERATE_PANORMAIC))
         self.action_toothLandmark_annotation.setText(_translate("MainWindow", WindowConstant.ACTION_TOOTH_LANDMARK_ANNOTATION))
+        self.action_coronal_canal_annotation.setText(_translate("MainWindow", WindowConstant.ACTION_CORONAL_CANAL_ANNOTATION))
         self.action_implant_toolbar.setText(_translate("MainWindow", WindowConstant.ACTION_IMPLANT_TOOLBAR))
         self.action_registration_toolbar.setText(_translate("MainWindow", WindowConstant.ACTION_REGISTRATION_TOOLBAR))
         self.action_parameters_toolbar.setText(_translate("MainWindow", WindowConstant.ACTION_PARAMETERS_TOOLBAR))
@@ -207,5 +221,5 @@ class MenuBarManager:
         self.modelloadMenu.setTitle(_translate("MainWindow", WindowConstant.MODEL_LOAD))
         self.actionAdd_Load_Universal_model.setText(_translate("MainWindow", WindowConstant.LOAD_UNIVERSAL_MODEL))
         self.actionAdd_Load_Lungseg_model.setText(_translate("MainWindow", WindowConstant.LOAD_LUNGSEG_MODEL))
-
+        self.action_nifti_segmentation_editor.setText(_translate("MainWindow", WindowConstant.ACTION_NIFTI_SEGMENTATION_EDITOR))
 

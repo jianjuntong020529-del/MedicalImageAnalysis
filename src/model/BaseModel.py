@@ -1,14 +1,15 @@
 import vtk
 from vtkmodules.vtkImagingCore import vtkImageShiftScale
 
-from src.utils.globalVariables import getDirPath
+from src.utils.state_store import get_state_store
 
 
 class BaseModel:
     def __init__(self) -> None:
+        self.state_store = get_state_store()
         # Reader
         self.imageReader = vtk.vtkDICOMImageReader()
-        self.imageReader.SetDirectoryName(getDirPath())
+        self.imageReader.SetDirectoryName(self.state_store.get("file", "dirpath"))
         self.imageReader.Update()
 
         # Update the data information

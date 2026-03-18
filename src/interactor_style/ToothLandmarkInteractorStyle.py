@@ -25,6 +25,7 @@ class LeftButtonPressEvent():
         self.picker.SetTolerance(0.01)
         self.picker.Pick(self.iren.GetEventPosition()[0], self.iren.GetEventPosition()[1], 0, self.render)
         self.start = self.picker.GetPickPosition()
+        print(self.iren.GetEventPosition()[0], self.iren.GetEventPosition()[1])
         print(self.start)
 
         point_x = int((self.start[0] - self.origin[0])/self.spacing[0])

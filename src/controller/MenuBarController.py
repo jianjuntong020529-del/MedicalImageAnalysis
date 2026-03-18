@@ -12,6 +12,9 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from medpy.io import load, save
 
+from src.utils import DICOMConversionParams, NPYToDICOMConverter
+from src.utils.logger import get_logger
+
 from src.interactor_style.SegmentationInteractorStyle import LeftButtonPressEvent_Point, LeftButtonPressEvent_labelBox, MouseMoveEvent_labelBox
 from src.constant.ParamConstant import ParamConstant
 from src.core.tooth_landmark_detc.Tooth_LandmarkDect_CBCT import MaxMin_normalization_Intensity
@@ -28,12 +31,15 @@ from src.model.ToothImplantListModel import ToothImplantList
 from src.model.VolumeRenderModel import VolumeRender
 from src.service.AnnotationService import AnnotationService
 from src.service.MenuBarService import MenuBarService
+from src.utils.ErrorRecoveryManager import ErrorRecoveryManager, ErrorType, ErrorContext
 from src.ui.GenweatePanomrmaicWindow import Generate_Panormaic_Widget
 from src.ui.ToothLandmarkWindow import Tooth_Landmark
+from src.ui.CoronalCanalAnnotationWindow import CoronalCanalAnnotationWindow
 from src.utils.IM0AndBIMUtils import Save_BIM, convertNsave
 from src.utils.globalVariables import *
 from src.widgets.MenuBarWidget import MenuBarManager
 
+logger = get_logger(__name__)
 
 class MenuBarController(MenuBarManager):
     def __init__(self, baseModelClass: BaseModel, viewer_model: OrthoViewerModel, toolBarController, QMainWindow):
@@ -73,15 +79,18 @@ class MenuBarController(MenuBarManager):
         self.actionAdd_DiICOM_Data.triggered.connect(self.on_actionAdd_DICOM_Data)
         self.actionAdd_IM0BIM_Data.triggered.connect(self.on_actionAdd_IM0BIM_Data)
         self.actionAdd_STL_Data.triggered.connect(self.on_actionAdd_STL_Data)
-        self.actionAdd_Npy_Data.triggered,connect(self.on_actionAdd_Npy_Data)
+        self.actionAdd_NIFIT_Data.triggered.connect(self.on_actionAdd_NIFIT_Data)
+        self.actionAdd_NPY_Data.triggered.connect(self.on_actionAdd_NPY_Data)
 
         self.action_generatePanormaic.triggered.connect(self.on_action_generatePanormaic)
         self.action_toothLandmark_annotation.triggered.connect(self.on_action_tooth_landmark_annotation)
+        self.action_coronal_canal_annotation.triggered.connect(self.on_action_coronal_canal_annotation)
         self.action_implant_toolbar.triggered.connect(self.on_action_implant_toolbar)
         self.action_registration_toolbar.triggered.connect(self.on_action_registration_toolbar)
         self.action_parameters_toolbar.triggered.connect(self.on_action_parameters_toolbar)
         self.actionAdd_Load_Universal_model.triggered.connect(self.on_actionAdd_Load_Universal_model)
         self.actionAdd_Load_Lungseg_model.triggered.connect(self.on_actionAdd_Load_Lungseg_model)
+        self.action_nifti_segmentation_editor.triggered.connect(self.on_action_nifti_segmentation_editor)
         self.pointAction.triggered.connect(self.on_action_point)
         self.point_label_0.triggered.connect(self.select_point_label)
         self.point_label_1.triggered.connect(self.select_point_label)
@@ -92,6 +101,7 @@ class MenuBarController(MenuBarManager):
         self.segmentation_type_sliceRange.triggered.connect(self.select_slice_range)
         self.startSegmentationAction.triggered.connect(self.on_action_startSegmentation)
         self.saveResultAction.triggered.connect(self.on_action_saveResult)
+
 
     def on_action_implant_toolbar(self):
         print("打开植体工具栏")
@@ -308,122 +318,452 @@ class MenuBarController(MenuBarManager):
 
         self.menuBarService.on_actionAdd_IM0_Data(self.SliceThickness)
 
-    def on_actionAdd_Npy_Data(self):
-        print("选择npy文件")
-        old_path = getDirPath()
-        path = QtWidgets.QFileDialog.getOpenFileName(None, "选取文件", "", "*.npy")
-        if path == "":
-            if old_path == 'F:\CBCT_Register_version_12_7\testdata\\40':
-                setFileIsEmpty(True)
-                return
-            else:
-                path = old_path
-        path = path[0]
-        self.IM0path = path
-        print(path)
-        subname = path.split('/')[-1]
-        subname = subname.split('.')[0]
-        print(subname)
-        # # ----------------------IM0转化为DICOM-----------------------------------------------
-        # self.save_dicompath_temp = ParamConstant.OUTPUT_FILE_PATH + subname + '_temp/'
-        # if not os.path.exists(self.save_dicompath_temp):
-        #     os.mkdir(self.save_dicompath_temp)
-        # else:
-        #     for file in glob.glob(self.save_dicompath_temp + '*.dcm'):
-        #         os.remove(file)
-        # os.system('mipg2dicom ' + path + ' ' + self.save_dicompath_temp)
-        # # ---------------------------------------------------------------------------------
-        # self.save_dicompath = ParamConstant.OUTPUT_FILE_PATH + subname + '/'
-        # if not os.path.exists(self.save_dicompath):
-        #     os.mkdir(self.save_dicompath)
-        # else:
-        #     for file in glob.glob(self.save_dicompath + '*.dcm'):
-        #         os.remove(file)
-        # # --------------------------------------
-        # dicom_files = glob.glob(self.save_dicompath_temp + '*.dcm')
-        # dicom_files.sort()
-        # number_slices = len(dicom_files)
-        # for slice_ in range(number_slices):
-        #     dicom_file = pydicom.dcmread(dicom_files[slice_])
-        #     convertNsave(dicom_file, ParamConstant.IMAGE_DCM, self.save_dicompath, slice_)
-        #     self.SliceThickness = dicom_file.SliceThickness
-        # # ---------------------------------------------------------------------------------
-        #
-        # # 获取目录下的所有文件名
-        # files = os.listdir(self.save_dicompath)
-        # # 检查是否存在DCM文件
-        # dcm_files_exist = any(file.endswith(".dcm") for file in files)
-        #
-        # if not dcm_files_exist:
-        #     print("该目录下没有DCM文件数据")
+    def on_actionAdd_NIFIT_Data(self):
+        """
+        处理 NIFTI 文件加载操作
+        
+        验证 DICOM 数据已加载，然后打开文件选择对话框选择 NIFTI 文件，
+        并委托给 MenuBarService 进行处理
+        """
+        print("选择 NIFTI 文件")
+        
+        # 验证 DICOM 数据是否已加载
+        # if getDirPath() == "" or getFileIsEmpty():
+        #     self.message_warning_dialog(
+        #         'NIFTI 加载错误', 
+        #         '请先加载 DICOM 数据，然后再加载 NIFTI 分割文件。'
+        #     )
         #     return
-        #
-        # DataAndModelType.DATA_TYPE = 'IM0'
-        #
-        # try:
-        #     ToolBarWidget.parameters_widget.tableWidget.clearContents()
-        #     ToolBarWidget.parameters_widget.tableWidget.setRowCount(0)
-        # except:
-        #     print("clear table fail!!!")
-        #
-        # try:
-        #     ToolBarWidget.implant_widget.ToothID_Implant_QStringList.removeRows(1,
-        #                                                                         ToolBarWidget.implant_widget.ToothID_Implant_QStringList.rowCount() - 1)
-        # except:
-        #     print("clear tooth implant list failed")
-        #
-        # if ToolBarEnable.ruler_enable:
-        #     self.toolBarController.toolBarService.clear_ruler()
-        #     self.toolBarController.action_ruler.setChecked(False)
-        # if ToolBarEnable.paint_enable:
-        #     self.toolBarController.toolBarService.clear_paint()
-        #     self.toolBarController.action_paint.setChecked(False)
-        # if ToolBarEnable.pixel_enable:
-        #     self.toolBarController.toolBarService.clear_pixel()
-        #     self.toolBarController.action_pixel.setChecked(False)
-        # if ToolBarEnable.polyline_enable:
-        #     self.toolBarController.toolBarService.clear_polyline()
-        #     self.toolBarController.action_polyline.setChecked(False)
-        # if ToolBarEnable.crosshair_enable:
-        #     self.toolBarController.toolBarService.clear_crosshair()
-        #     self.toolBarController.action_crosshair.setChecked(False)
-        # if ToolBarEnable.angle_enable:
-        #     self.toolBarController.toolBarService.clear_angle()
-        #     self.toolBarController.action_angle.setChecked(False)
-        # if ToolBarEnable.roi_enable:
-        #     self.toolBarController.toolBarService.clear_get_roi()
-        #     self.toolBarController.action_get_roi.setChecked(False)
-        # if ToolBarEnable.dragging_enable:
-        #     self.QMainWindow.setCursor(Qt.ArrowCursor)
-        #     self.toolBarController.toolBarService.clear_dragging_image()
-        #     self.toolBarController.action_dragging_image.setChecked(False)
-        # if self.pointAction.isChecked():
-        #     self.toolBarController.toolBarService.disable_point_action()
-        # if self.labelBoxAction.isChecked():
-        #     self.toolBarController.toolBarService.disable_label_box_action()
-        # self.toolBarController.toolBar.update()
-        #
-        # ToothImplantList.Tooth_Implant_File_List.clear()
-        # ToothImplantList.Tooth_Implant_File_List = []
-        #
-        # ToothImplantList.Tooth_Implant_Reg_File_List.clear()
-        # ToothImplantList.Tooth_Implant_Reg_File_List = []
-        #
-        # setDirPath(self.save_dicompath)
-        #
-        # self.reader.SetDirectoryName(self.save_dicompath)
-        # self.reader.Update()
-        # # 更新 Data Information
-        # self.baseModelClass.imageReader = self.reader
-        # self.baseModelClass.update_data_information()
-        #
-        # self.menuBarService.on_actionAdd_IM0_Data(self.SliceThickness)
+        
+        # 打开文件选择对话框，添加适当的过滤器
+        file_dialog_result = QtWidgets.QFileDialog.getOpenFileName(
+            None, 
+            "选择 NIFTI 分割文件", 
+            "", 
+            "NIFTI Files (*.nii *.nii.gz);;All Files (*)"
+        )
+        
+        if file_dialog_result[0] == "":
+            return
+        
+        nifti_path = file_dialog_result[0]
+        
+        try:
+            # 验证文件存在性
+            if not os.path.exists(nifti_path):
+                self.message_warning_dialog(
+                    'NIFTI 文件错误',
+                    f'选择的文件不存在: {nifti_path}'
+                )
+                return
+            
+            # 委托给服务层处理
+            self.menuBarService.on_actionAdd_NIFIT_Data(nifti_path)
+            
+            # 加载NIFTI文件后，恢复缩放交互功能
+            self.restore_zoom_interaction()
+            
+        except Exception as e:
+            # 错误处理和用户反馈
+            error_message = f"加载 NIFTI 文件时发生错误: {str(e)}"
+            self.message_warning_dialog('NIFTI 加载错误', error_message)
 
-    def LoadSTL(self, filename):
-        bounds = self.baseModelClass.bounds
-        self.center0 = (bounds[1] + bounds[0]) / 2.0
-        self.center1 = (bounds[3] + bounds[2]) / 2.0
-        self.center2 = (bounds[5] + bounds[4]) / 2.0
+    def on_actionAdd_NPY_Data(self):
+        """
+        处理 NPY 文件加载操作
+        
+        打开文件选择对话框选择 .npy 文件，验证文件存在性和可读性，
+        并委托给 MenuBarService 进行处理，同时处理UI状态更新和用户反馈
+        """
+        print("选择 NPY 文件")
+        
+        error_recovery_manager = None
+        
+        try:
+            # 初始化错误恢复管理器
+            error_recovery_manager = ErrorRecoveryManager()
+            
+            # 打开文件选择对话框，添加适当的过滤器
+            file_dialog_result = QtWidgets.QFileDialog.getOpenFileName(
+                None, 
+                "选择 NPY 数据文件", 
+                "", 
+                "NumPy Files (*.npy);;All Files (*)"
+            )
+            
+            if file_dialog_result[0] == "":
+                return
+            
+            npy_path = file_dialog_result[0]
+            
+            # 验证文件存在性
+            if not os.path.exists(npy_path):
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.FILE_NOT_FOUND,
+                    f'选择的文件不存在: {npy_path}',
+                    file_path=npy_path
+                )
+                error_recovery_manager.handle_error(error_context)
+                
+                self.message_warning_dialog(
+                    'NPY 文件错误',
+                    f'选择的文件不存在: {npy_path}'
+                )
+                return
+            
+            # 验证文件可读性
+            if not os.access(npy_path, os.R_OK):
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.PERMISSION_ERROR,
+                    f'文件无法读取，请检查文件权限: {npy_path}',
+                    file_path=npy_path
+                )
+                error_recovery_manager.handle_error(error_context)
+                
+                self.message_warning_dialog(
+                    'NPY 文件错误',
+                    f'文件无法读取，请检查文件权限: {npy_path}'
+                )
+                return
+            
+            # 基本的 .npy 文件格式验证
+            if not npy_path.lower().endswith('.npy'):
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.INVALID_DATA_FORMAT,
+                    '请选择有效的 .npy 文件',
+                    file_path=npy_path
+                )
+                error_recovery_manager.handle_error(error_context)
+                
+                self.message_warning_dialog(
+                    'NPY 文件错误',
+                    '请选择有效的 .npy 文件'
+                )
+                return
+
+            #  这里实现NPY转化为DICOM的逻辑
+            # 如果是重新加载NPY文件，需要先释放VTK reader对旧文件的占用
+            if DataAndModelType.DATA_TYPE == 'NPY':
+                logger.info("Releasing VTK reader resources before reloading NPY data")
+                try:
+                    # 释放reader对文件的占用
+                    self.reader.SetDirectoryName("")
+                    self.reader.Modified()
+                    self.reader.Update()
+                    # 清理viewer中的引用
+                    if hasattr(self, 'menuBarService'):
+                        for viewer_attr in ['viewer_XY', 'viewer_YZ', 'viewer_XZ']:
+                            if hasattr(self.menuBarService, viewer_attr):
+                                viewer = getattr(self.menuBarService, viewer_attr)
+                                if viewer and hasattr(viewer, 'GetRenderWindow'):
+                                    viewer.GetRenderWindow().Finalize()
+                    # 给系统一点时间释放文件句柄
+                    import time
+                    time.sleep(0.2)
+                except Exception as e:
+                    logger.warning(f"Failed to release reader resources: {e}")
+            
+            self.save_npypath_temp = ParamConstant.OUTPUT_FILE_PATH + 'npy_temp/'
+            if not os.path.exists(self.save_npypath_temp):
+                os.mkdir(self.save_npypath_temp)
+            else:
+                for file in glob.glob(self.save_npypath_temp + "*.dcm"):
+                    os.remove(file)
+            self.save_npypath = ParamConstant.OUTPUT_FILE_PATH + 'npy/'
+            if not os.path.exists(self.save_npypath):
+                os.mkdir(self.save_npypath)
+            else:
+                for file in glob.glob(self.save_npypath_temp + "*.dcm"):
+                    os.remove(file)
+
+            # 加载NPY文件
+            try:
+                npy_data = np.load(npy_path)
+                logger.info(f"Successfully loaded NPY file: shape={npy_data.shape}, dtype={npy_data.dtype}")
+            except Exception as e:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.INVALID_DATA_FORMAT,
+                    f"Failed to load NPY file: {npy_path}",
+                    file_path=npy_path,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+                raise ValueError(f"Failed to load NPY file: {npy_path}") from e
+
+            # 验证数据格式为三维数组
+            if len(npy_data.shape) != 3:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.INVALID_DATA_FORMAT,
+                    f"Invalid data format. Expected 3D array, got {len(npy_data.shape)}D array with shape: {npy_data.shape}",
+                    file_path=npy_path
+                )
+                error_recovery_manager.handle_error(error_context)
+                raise ValueError(
+                    f"Invalid data format. Expected 3D array, got {len(npy_data.shape)}D array with shape: {npy_data.shape}")
+
+            if npy_data.size == 0:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.INVALID_DATA_FORMAT,
+                    "NPY file contains no data",
+                    file_path=npy_path
+                )
+                error_recovery_manager.handle_error(error_context)
+                raise ValueError("NPY file contains no data")
+
+            # 创建NPY到DICOM转换器
+            conversion_params = DICOMConversionParams(
+                pixel_spacing=(1.0, 1.0),
+                slice_thickness=1.0,
+                patient_name="NPY_PATIENT",
+                study_description="NPY Data Import",
+                data_type= "NPY"
+            )
+            converter = NPYToDICOMConverter(conversion_params)
+
+            # 转换NPY数据为DICOM格式
+            try:
+                dicom_files = converter.convert(npy_data, self.save_npypath_temp)
+                logger.info(f"Successfully converted NPY to {len(dicom_files)} DICOM files")
+            except MemoryError as e:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.MEMORY_ERROR,
+                    f"Insufficient memory to convert NPY data",
+                    file_path=npy_path,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+                raise RuntimeError(f"Insufficient memory to convert NPY data") from e
+            except Exception as e:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.CONVERSION_ERROR,
+                    f"Failed to convert NPY to DICOM format",
+                    file_path=npy_path,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+                raise RuntimeError(f"Failed to convert NPY to DICOM format") from e
+
+
+            dicom_files = glob.glob(self.save_npypath_temp + "*.dcm")
+            dicom_files.sort()
+            number_slices = len(dicom_files)
+            for index in range(number_slices):
+                dicom_file = pydicom.dcmread(dicom_files[index])
+                convertNsave(dicom_file,ParamConstant.IMAGE_DCM, self.save_npypath, index)
+                self.SliceThickness = dicom_file.SliceThickness
+
+            # 在开始处理前清理UI状态和工具栏
+            self._clear_ui_state_for_new_data()
+
+            DataAndModelType.DATA_TYPE = 'NPY'
+
+            setDirPath(self.save_npypath)
+
+            self.reader.SetDirectoryName(self.save_npypath)
+            self.reader.Update()
+            # 更新 Data Information
+            self.baseModelClass.imageReader = self.reader
+            self.baseModelClass.update_data_information()
+
+            self.menuBarService.on_actionAdd_NPY_Data(self.SliceThickness)
+
+            
+        except FileNotFoundError as e:
+            error_message = f"文件未找到: {str(e)}"
+            if error_recovery_manager:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.FILE_NOT_FOUND,
+                    error_message,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+            self.message_warning_dialog('NPY 加载错误', error_message)
+            
+        except PermissionError as e:
+            error_message = f"文件权限错误: {str(e)}"
+            if error_recovery_manager:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.PERMISSION_ERROR,
+                    error_message,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+            self.message_warning_dialog('NPY 加载错误', error_message)
+            
+        except ValueError as e:
+            error_message = f"数据格式错误: {str(e)}"
+            if error_recovery_manager:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.INVALID_DATA_FORMAT,
+                    error_message,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+            self.message_warning_dialog('NPY 加载错误', error_message)
+            
+        except MemoryError as e:
+            error_message = f"内存不足，建议关闭其他应用程序或使用较小的数据文件: {str(e)}"
+            if error_recovery_manager:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.MEMORY_ERROR,
+                    error_message,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+            self.message_warning_dialog('NPY 加载错误', error_message)
+            
+        except RuntimeError as e:
+            error_message = f"运行时错误: {str(e)}"
+            if error_recovery_manager:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.VTK_ERROR,
+                    error_message,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+            self.message_warning_dialog('NPY 加载错误', error_message)
+            
+        except Exception as e:
+            # 错误处理和用户反馈
+            error_message = f"加载 NPY 文件时发生未知错误: {str(e)}"
+            if error_recovery_manager:
+                error_context = error_recovery_manager.create_error_context(
+                    ErrorType.UNKNOWN_ERROR,
+                    error_message,
+                    exception=e
+                )
+                error_recovery_manager.handle_error(error_context)
+            self.message_warning_dialog('NPY 加载错误', error_message)
+        
+        finally:
+            # 确保资源清理
+            if error_recovery_manager:
+                try:
+                    error_recovery_manager.cleanup_resources()
+                except Exception as cleanup_error:
+                    print(f"清理资源时发生错误: {cleanup_error}")
+
+    def _clear_ui_state_for_new_data(self):
+        """
+        为新数据加载清理UI状态和工具栏
+        
+        确保与现有DICOM和IM0数据加载功能的一致性
+        """
+        try:
+            # 清理参数表格
+            try:
+                ToolBarWidget.parameters_widget.tableWidget.clearContents()
+                ToolBarWidget.parameters_widget.tableWidget.setRowCount(0)
+            except:
+                print("clear table fail!!!")
+
+            # 清理植体列表
+            try:
+                ToolBarWidget.implant_widget.ToothID_Implant_QStringList.removeRows(1,
+                                                                                    ToolBarWidget.implant_widget.ToothID_Implant_QStringList.rowCount() - 1)
+            except:
+                print("clear tooth implant list failed")
+
+            # 清理所有工具栏状态
+            if ToolBarEnable.ruler_enable:
+                self.toolBarController.toolBarService.clear_ruler()
+                self.toolBarController.action_ruler.setChecked(False)
+            if ToolBarEnable.paint_enable:
+                self.toolBarController.toolBarService.clear_paint()
+                self.toolBarController.action_paint.setChecked(False)
+            if ToolBarEnable.pixel_enable:
+                self.toolBarController.toolBarService.clear_pixel()
+                self.toolBarController.action_pixel.setChecked(False)
+            if ToolBarEnable.polyline_enable:
+                self.toolBarController.toolBarService.clear_polyline()
+                self.toolBarController.action_polyline.setChecked(False)
+            if ToolBarEnable.crosshair_enable:
+                self.toolBarController.toolBarService.clear_crosshair()
+                self.toolBarController.action_crosshair.setChecked(False)
+            if ToolBarEnable.angle_enable:
+                self.toolBarController.toolBarService.clear_angle()
+                self.toolBarController.action_angle.setChecked(False)
+            if ToolBarEnable.roi_enable:
+                self.toolBarController.toolBarService.clear_get_roi()
+                self.toolBarController.action_get_roi.setChecked(False)
+            if ToolBarEnable.dragging_enable:
+                self.QMainWindow.setCursor(Qt.ArrowCursor)
+                self.toolBarController.toolBarService.clear_dragging_image()
+                self.toolBarController.action_dragging_image.setChecked(False)
+            if self.pointAction.isChecked():
+                self.toolBarController.toolBarService.disable_point_action()
+            if self.labelBoxAction.isChecked():
+                self.toolBarController.toolBarService.disable_label_box_action()
+            
+            # 更新工具栏显示
+            self.toolBarController.toolBar.update()
+
+            # 清理植体相关列表
+            ToothImplantList.Tooth_Implant_File_List.clear()
+            ToothImplantList.Tooth_Implant_File_List = []
+
+            ToothImplantList.Tooth_Implant_Reg_File_List.clear()
+            ToothImplantList.Tooth_Implant_Reg_File_List = []
+            
+        except Exception as e:
+            print(f"清理UI状态时发生错误: {e}")
+
+    def _handle_npy_loading_success(self, npy_path: str):
+        """
+        处理NPY数据加载成功后的UI更新
+        
+        Args:
+            npy_path: 成功加载的NPY文件路径
+        """
+        try:
+            # 设置文件路径和状态
+            setDirPath(npy_path)
+            
+            # 更新数据信息
+            self.reader = self.baseModelClass.imageReader
+            
+            # 设置标注主题名称
+            ParamConstant.ANNOTATION_SUBJECT_NAME = os.path.basename(npy_path).split('.')[0]
+            
+            # 显示成功消息
+            self.message_info_dialog(
+                'NPY 数据加载', 
+                f'NPY 数据加载成功！\n文件: {os.path.basename(npy_path)}\n数据类型: NPY'
+            )
+            
+            print(f"NPY 数据加载成功: {npy_path}")
+            print(f"数据类型已设置为: {DataAndModelType.DATA_TYPE}")
+            
+        except Exception as e:
+            print(f"处理NPY加载成功状态时发生错误: {e}")
+            # 不抛出异常，因为主要功能已经完成
+
+
+
+    def LoadSTL(self, filename, color=None):
+        """
+        加载STL文件并创建actor
+        
+        Args:
+            filename: STL文件路径
+            color: 可选的RGB颜色元组 (r, g, b)，值范围0-1
+            
+        Returns:
+            vtk.vtkLODActor: STL模型的actor
+        """
+        # 如果没有加载医学影像数据，使用默认中心点
+        try:
+            bounds = self.baseModelClass.bounds
+            self.center0 = (bounds[1] + bounds[0]) / 2.0
+            self.center1 = (bounds[3] + bounds[2]) / 2.0
+            self.center2 = (bounds[5] + bounds[4]) / 2.0
+        except:
+            # 没有医学影像数据时，使用原点
+            self.center0 = 0.0
+            self.center1 = 0.0
+            self.center2 = 0.0
+            logger.info("No medical image data loaded, using origin as center")
+        
         transform = vtk.vtkTransform()
         transform.Translate(self.center0, self.center1, self.center2)
 
@@ -434,39 +774,124 @@ class MenuBarController(MenuBarManager):
         actor = vtk.vtkLODActor()
         actor.SetMapper(mapper)
         actor.SetUserTransform(transform)
+        
+        # 设置颜色
+        if color:
+            actor.GetProperty().SetColor(color[0], color[1], color[2])
+        
         return actor  # 表示渲染场景中的实体
 
     def on_actionAdd_STL_Data(self):
+        """
+        加载STL文件到体渲染窗口
+        支持多选文件，统一使用黄色显示
+        """
+        # 获取或初始化renderer
+        if not hasattr(self.viewModel.VolumeOrthorViewer, 'renderer') or self.viewModel.VolumeOrthorViewer.renderer is None:
+            # 如果没有renderer，创建一个新的
+            logger.info("Creating new renderer for STL display")
+            renderer = vtk.vtkRenderer()
+            renderer.SetBackground(0.5, 0.5, 0.5)
+            self.viewModel.VolumeOrthorViewer.widget.GetRenderWindow().AddRenderer(renderer)
+            self.viewModel.VolumeOrthorViewer.renderer = renderer
+            
+            # 设置交互样式
+            style = vtk.vtkInteractorStyleTrackballCamera()
+            style.SetDefaultRenderer(renderer)
+            style.EnabledOn()
+            self.viewModel.VolumeOrthorViewer.renderWindowInteractor.SetInteractorStyle(style)
+            
+            # 添加坐标轴
+            axesActor = vtk.vtkAxesActor()
+            axes = vtk.vtkOrientationMarkerWidget()
+            axes.SetOrientationMarker(axesActor)
+            axes.SetInteractor(self.viewModel.VolumeOrthorViewer.renderWindowInteractor)
+            axes.EnabledOn()
+            axes.SetEnabled(1)
+            axes.InteractiveOff()
+            
         self.renderer_volume = self.viewModel.VolumeOrthorViewer.renderer
+        
         if self.actionAdd_STL_Data.isChecked():
-            print("选择STL文件")
-            path = QtWidgets.QFileDialog.getOpenFileName(None, "选择STL文件", filter="*.stl")
-            if path == "":
+            logger.info("选择STL文件")
+            
+            # 使用getOpenFileNames支持多选
+            file_dialog_result = QtWidgets.QFileDialog.getOpenFileNames(
+                None, 
+                "选择STL文件（可多选）", 
+                "", 
+                "STL Files (*.stl);;All Files (*)"
+            )
+            
+            stl_paths = file_dialog_result[0]
+            
+            if not stl_paths or len(stl_paths) == 0:
+                logger.info("未选择文件")
+                self.actionAdd_STL_Data.setChecked(False)
                 return
-            try:
-                self.renderer_volume.RemoveActor(VolumeRender.actor_stl)
-            except:
-                print('actor_stl is not found!!!')
-            try:
-                self.renderer_volume.RemoveActor(VolumeRender.volume_cbct)
-            except:
-                print('volume_cbct is not found!!!')
-            print(path)
+            
+            logger.info(f"选择了 {len(stl_paths)} 个STL文件")
+            
+            # 清除之前的STL actors
+            if not hasattr(VolumeRender, 'actor_stl_list'):
+                VolumeRender.actor_stl_list = []
+            
+            for actor in VolumeRender.actor_stl_list:
+                try:
+                    self.renderer_volume.RemoveActor(actor)
+                except:
+                    pass
+            VolumeRender.actor_stl_list.clear()
+            
+            # 隐藏体渲染（如果存在）
+            if hasattr(VolumeRender, 'volume_cbct') and VolumeRender.volume_cbct:
+                try:
+                    self.renderer_volume.RemoveVolume(VolumeRender.volume_cbct)
+                    logger.info("隐藏体渲染")
+                except:
+                    logger.debug('volume_cbct removal failed')
+            
+            # 统一的黄色
+            yellow_color = (223/255.0, 196/255.0, 45/255.0)
+            
+            # 加载所有选中的STL文件
             self.vtkWidget_Volume = self.viewModel.VolumeOrthorViewer.widget
-            actor_stl = self.LoadSTL(path[0])
-            self.renderer_volume.AddActor(actor_stl)
+            for stl_path in stl_paths:
+                try:
+                    logger.info(f"加载STL文件: {stl_path}")
+                    actor_stl = self.LoadSTL(stl_path, color=yellow_color)
+                    self.renderer_volume.AddActor(actor_stl)
+                    VolumeRender.actor_stl_list.append(actor_stl)
+                except Exception as e:
+                    logger.error(f"加载STL文件失败 {stl_path}: {e}")
+            
+            # 重置相机以显示所有模型
+            self.renderer_volume.ResetCamera()
             self.vtkWidget_Volume.Render()
-            VolumeRender.actor_stl = actor_stl
+            
+            logger.info(f"成功加载 {len(VolumeRender.actor_stl_list)} 个STL模型")
+            
         else:
-            print("恢复体渲染")
-            try:
-                self.renderer_volume.RemoveActor(VolumeRender.actor_stl)
-            except:
-                print('actor_stl is not found!!!')
-            try:
-                self.renderer_volume.AddActor(VolumeRender.volume_cbct)
-            except:
-                print('volume_cbct is not found!!!')
+            logger.info("恢复体渲染")
+            
+            # 移除所有STL actors
+            if hasattr(VolumeRender, 'actor_stl_list'):
+                for actor in VolumeRender.actor_stl_list:
+                    try:
+                        self.renderer_volume.RemoveActor(actor)
+                    except:
+                        pass
+                VolumeRender.actor_stl_list.clear()
+            
+            # 恢复体渲染（如果存在）
+            if hasattr(VolumeRender, 'volume_cbct') and VolumeRender.volume_cbct:
+                try:
+                    self.renderer_volume.AddVolume(VolumeRender.volume_cbct)
+                    logger.info("恢复体渲染")
+                except:
+                    logger.debug('volume_cbct restoration failed')
+            
+            self.vtkWidget_Volume.Render()
 
     def valuechange1(self):
         self.menuBarService.valuechange1()
@@ -476,6 +901,12 @@ class MenuBarController(MenuBarManager):
 
     def valuechange3(self):
         self.menuBarService.valuechange3()
+
+    def on_action_nifti_segmentation_editor(self):
+        """打开NIfTI分割结果编辑窗口"""
+        from src.controller.SegmentationEditController import SegmentationEditController
+        self._seg_edit_controller = SegmentationEditController(self.QMainWindow)
+        self._seg_edit_controller.show_segmentation_editor()
 
     def on_action_generatePanormaic(self):
         print("全景图生成功能")
@@ -492,6 +923,15 @@ class MenuBarController(MenuBarManager):
             return
         self.tooth_landmark_window = Tooth_Landmark(self.baseModelClass, self.viewModel)
         self.tooth_landmark_window.show()
+
+    def on_action_coronal_canal_annotation(self):
+        print("冠状面下颌管标注")
+        if getFileIsEmpty():
+            print("未导入文件，无法进行下颌管标注！")
+            return
+        # 创建独立的标注窗口，不传递主窗口的视图模型
+        self.coronal_canal_annotation_window = CoronalCanalAnnotationWindow(self.baseModelClass, self.viewModel)
+        self.coronal_canal_annotation_window.show()
 
     def on_action_point(self):
         if getFileIsEmpty():
@@ -910,4 +1350,88 @@ class MenuBarController(MenuBarManager):
     def message_warning_dialog(title, text):
         msg_box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Warning, title, text)
         msg_box.exec_()
+
+    def restore_zoom_interaction(self):
+        """
+        恢复VTK窗口的缩放交互功能
+        在加载NIFTI文件后调用此方法来确保用户可以正常缩放视图
+        """
+        try:
+            print("正在恢复缩放交互功能...")
+            
+            # 获取所有查看器
+            viewers = [
+                self.viewModel.AxialOrthoViewer.viewer,      # XY视图
+                self.viewModel.SagittalOrthoViewer.viewer,   # YZ视图  
+                self.viewModel.CoronalOrthoViewer.viewer,    # XZ视图
+            ]
+            
+            # 为每个查看器恢复交互功能
+            for i, viewer in enumerate(viewers):
+                if viewer is not None:
+                    try:
+                        # 获取交互器
+                        interactor = viewer.GetRenderWindow().GetInteractor()
+                        if interactor is not None:
+                            # 确保交互器已初始化
+                            if not interactor.GetInitialized():
+                                interactor.Initialize()
+                            
+                            # 获取当前的交互器样式
+                            current_style = viewer.GetInteractorStyle()
+                            
+                            if current_style is not None:
+                                # 确保交互器样式已启用
+                                current_style.EnabledOn()
+                                
+                                # 如果是vtkImageViewer2，确保其交互功能正常
+                                if hasattr(viewer, 'SetupInteractor'):
+                                    viewer.SetupInteractor(interactor)
+                                
+                                print(f"已恢复视图 {i+1} 的交互功能")
+                            else:
+                                print(f"警告: 视图 {i+1} 没有交互器样式")
+                        else:
+                            print(f"警告: 视图 {i+1} 没有交互器")
+                    except Exception as e:
+                        print(f"恢复视图 {i+1} 交互功能时出错: {e}")
+            
+            # 特别处理体绘制窗口的交互功能
+            try:
+                volume_interactor = self.viewModel.VolumeOrthorViewer.renderWindowInteractor
+                if volume_interactor is not None:
+                    # 确保体绘制窗口有正确的交互器样式
+                    style = vtk.vtkInteractorStyleTrackballCamera()
+                    style.SetDefaultRenderer(self.viewModel.VolumeOrthorViewer.renderer)
+                    style.EnabledOn()
+                    volume_interactor.SetInteractorStyle(style)
+                    
+                    if not volume_interactor.GetInitialized():
+                        volume_interactor.Initialize()
+                    
+                    print("已恢复体绘制窗口的交互功能")
+            except Exception as e:
+                print(f"恢复体绘制窗口交互功能时出错: {e}")
+            
+            # 强制刷新所有窗口
+            try:
+                widgets = [
+                    self.viewModel.AxialOrthoViewer.widget,
+                    self.viewModel.SagittalOrthoViewer.widget,
+                    self.viewModel.CoronalOrthoViewer.widget,
+                    self.viewModel.VolumeOrthorViewer.widget
+                ]
+                
+                for widget in widgets:
+                    if widget is not None:
+                        widget.GetRenderWindow().Render()
+                        
+            except Exception as e:
+                print(f"刷新窗口时出错: {e}")
+            
+            print("缩放交互功能恢复完成")
+            
+        except Exception as e:
+            print(f"恢复缩放交互功能时发生错误: {e}")
+            # 即使出错也不应该阻止程序继续运行
 

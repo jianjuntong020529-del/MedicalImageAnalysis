@@ -48,11 +48,6 @@ class Tooth_Landmark(QWidget):
         self.tool_bar_layout.setSpacing(APPVisualStyle.LAYOUT_SPACING)
         self.tool_bar_layout.setAlignment(Qt.AlignTop)
 
-        # -----------------------------toolbar layout---------------------------------------------------------------
-        self.tool_bar_layout = QtWidgets.QVBoxLayout()
-        self.tool_bar_layout.setSpacing(APPVisualStyle.LAYOUT_SPACING)
-        self.tool_bar_layout.setAlignment(Qt.AlignTop)
-
         self.contrast = Contrast()
         self.contrast.init_widget()
         self.tool_bar_layout.addWidget(self.contrast.widget_contrast)
@@ -65,7 +60,8 @@ class Tooth_Landmark(QWidget):
         self.tool_bar_layout.addWidget(self.toothLandmark.pushButton_load, Qt.AlignBottom)
         self.tool_bar_layout.addWidget(self.toothLandmark.pushButton_save, Qt.AlignBottom)
         self.tool_bar_layout.addWidget(self.toothLandmark.pushButton_segmentation, Qt.AlignBottom)
-        self.tool_bar_layout.addWidget(self.toothLandmark.pushButton_loadSegmentationResult, Qt.AlignBottom)
+        self.tool_bar_layout.addWidget(self.toothLandmark.pushButton_load_alveolar_segResult, Qt.AlignBottom)
+        self.tool_bar_layout.addWidget(self.toothLandmark.pushButton_load_tooth_segResult, Qt.AlignBottom)
 
         self.system_layout.addLayout(self.tool_bar_layout, 2)
 

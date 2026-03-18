@@ -3,7 +3,10 @@ import vtk
 from src.model.AnnotationEnableModel import AnnotationEnable
 from src.model.BaseModel import BaseModel
 from src.model.OrthoViewerModel import OrthoViewerModel
-from src.utils.globalVariables import *
+from src.utils.state_store import get_state_store
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class AnnotationService:
@@ -11,204 +14,215 @@ class AnnotationService:
 
         self.baseModelClass = baseModelClass
         self.viewModel = viewModel
+        self.state_store = get_state_store()
 
     def label_clear(self):
-        self.viewer_XY = self.viewModel.AxialOrthoViewer.viewer
-        try:
-            for i in getPointsActor():
-                self.viewer_XY.GetRenderer().RemoveActor(i)
-            self.viewer_XY.Render()
-        except:
-            print('Close viewer_XY point actor Failed!!!')
-        clearPointsActor()
-        clearPointsUndoStack()
-        clearPointsRedoStack()
-        clearPointsDict()
+        viewer_xy = self.viewModel.AxialOrthoViewer.viewer
+        state = self.state_store.annotation
 
-        if getSelectSingleBoxLabel():
-            clearSingleUndoStack()
-            clearPointsRedoStack()
-            clearSingleBoundingBoxDict()
+        try:
+            for actor in state.points_actor:
+                viewer_xy.GetRenderer().RemoveActor(actor)
+            viewer_xy.Render()
+        except Exception:
+            logger.warning('Close viewer_XY point actor Failed', exc_info=True)
+
+        state.points_actor.clear()
+        state.points_undo_stack.clear()
+        state.points_redo_stack.clear()
+        state.points_dict.clear()
+
+        if state.select_single_box_label:
+            state.single_undo_stack.clear()
+            state.single_redo_stack.clear()
+            state.single_boundingBox_dict.clear()
             try:
-                for i in getSingleBoundingBoxActor():
-                    self.viewer_XY.GetRenderer().RemoveActor(i)
-                self.viewer_XY.Render()
-            except:
-                print("clear the single box actor failed!!")
+                for actor in state.single_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+                viewer_xy.Render()
+            except Exception:
+                logger.warning("clear the single box actor failed", exc_info=True)
+            state.single_bounding_box_actor.clear()
         else:
-            clearMultipleUndoStack()
-            clearMultipleRedoStack()
-            clearMultipleBoundingBoxDict()
+            state.multiple_undo_stack.clear()
+            state.multiple_redo_stack.clear()
+            state.multiple_boundingBox_dict.clear()
             try:
-                for i in getSingleBoundingBoxActor():
-                    self.viewer_XY.GetRenderer().RemoveActor(i)
-            except:
-                print('Close viewer_XY actor_paint Failed!!!')
+                for actor in state.single_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
             try:
-                for i in getLastBoundingBoxActor():
-                    self.viewer_XY.GetRenderer().RemoveActor(i)
-            except:
-                print('Close viewer_XY actor_paint Failed!!!')
+                for actor in state.last_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
             try:
-                for actor in getMultipleBoundingBoxActor():
-                    for i in actor:
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                clearMultipleBoundingBoxActor()
-                self.viewer_XY.Render()
-            except:
-                print("clear the single box actor failed!!")
+                for actor_group in state.multiple_bounding_box_actor:
+                    for actor in actor_group:
+                        viewer_xy.GetRenderer().RemoveActor(actor)
+                viewer_xy.Render()
+            except Exception:
+                logger.warning("clear the single box actor failed", exc_info=True)
+            state.single_bounding_box_actor.clear()
+            state.last_bounding_box_actor.clear()
+            state.multiple_bounding_box_actor.clear()
 
     def label_redo(self):
-        self.viewer_XY = self.viewModel.AxialOrthoViewer.viewer
-        self.verticalSlider_XY = self.viewModel.AxialOrthoViewer.slider
+        viewer_xy = self.viewModel.AxialOrthoViewer.viewer
+        slider = self.viewModel.AxialOrthoViewer.slider
+        state = self.state_store.annotation
+
         if AnnotationEnable.pointAction.isChecked():
-            point_dict = getPointsDict()
-            if len(getPointsRedoStack()) > 0:
-                redo_point = getPointsRedoStack().pop()
-                setPointsUndoStack(redo_point)
-                if str(redo_point[2]) in point_dict:
-                    point_dict[str(redo_point[2])]["points"].append([redo_point[0], redo_point[1]])
-                    point_dict[str(redo_point[2])]["label"].append(redo_point[3])
-                else:
-                    point_dict[str(redo_point[2])] = {"points": [[redo_point[0], redo_point[1]]],
-                                                      "label": [redo_point[3]],
-                                                      "image_name": "_image_" + str(redo_point[2]) + ".png"}
-            for point in getPointsUndoStack():
-                if point[2] == self.verticalSlider_XY.value():
+            point_dict = state.points_dict
+            if state.points_redo_stack:
+                redo_point = state.points_redo_stack.pop()
+                state.points_undo_stack.append(redo_point)
+                slice_key = str(redo_point[2])
+                entry = point_dict.setdefault(slice_key, {"points": [], "label": [], "image_name": "_image_" + slice_key + ".png"})
+                entry["points"].append([redo_point[0], redo_point[1]])
+                entry["label"].append(redo_point[3])
+            for point in state.points_undo_stack:
+                if point[2] == slider.value():
                     self.point_paints(point)
-            self.viewer_XY.UpdateDisplayExtent()
-            self.viewer_XY.Render()
-        else:
-            if getSelectSingleBoxLabel():
-                try:
-                    for i in getSingleBoundingBoxActor():
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                if getSingleRedoStack():
-                    setSingleUndoStack(getSingleRedoStack().pop())
-                for data in getSingleUndoStack():
-                    if data[4] == self.verticalSlider_XY.value():
-                        actor_list = self.drwa_single_bounding_box(data)
-                        setSingleBoundingBoxActor(actor_list)
-                self.viewer_XY.UpdateDisplayExtent()
-                self.viewer_XY.Render()
-            else:
-                try:
-                    for i in getSingleBoundingBoxActor():
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                try:
-                    for i in getLastBoundingBoxActor():
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                try:
-                    for actor in getMultipleBoundingBoxActor():
-                        for i in actor:
-                            self.viewer_XY.GetRenderer().RemoveActor(i)
-                    clearMultipleBoundingBoxActor()
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                boundingbox_dict = getMultipleBoundingBoxDict()
-                print(boundingbox_dict)
-                print(getMultipleRedoStack())
-                if len(getMultipleRedoStack()) > 0:
-                    redo_box = getMultipleRedoStack().pop()
-                    print("redo_box:", redo_box)
-                    setMultipleUndoStack(redo_box)
-                    if str(redo_box[4]) in boundingbox_dict:
-                        boundingbox_dict[str(redo_box[4])]["bounding_box"].append(redo_box)
-                    else:
-                        boundingbox_dict[str(redo_box[4])] = {"bounding_box": [redo_box],
-                                                              "image_name": "_image_" + str(redo_box[4]) + ".png"}
-                print(getMultipleUndoStack())
-                print(getMultipleBoundingBoxDict())
-                for data in getMultipleUndoStack():
-                    if data[4] == self.verticalSlider_XY.value():
-                        actor_list = self.drwa_single_bounding_box(data)
-                        setMultipleBoundingBoxActor(actor_list)
-                self.viewer_XY.UpdateDisplayExtent()
-                self.viewer_XY.Render()
+            viewer_xy.UpdateDisplayExtent()
+            viewer_xy.Render()
+            return
+
+        if state.select_single_box_label:
+            try:
+                for actor in state.single_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            if state.single_redo_stack:
+                state.single_undo_stack.append(state.single_redo_stack.pop())
+            new_actor_list = []
+            for data in state.single_undo_stack:
+                if data[4] == slider.value():
+                    new_actor_list = self.drwa_single_bounding_box(data)
+            state.single_bounding_box_actor = new_actor_list
+            viewer_xy.UpdateDisplayExtent()
+            viewer_xy.Render()
+            return
+
+            try:
+                for actor in state.single_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            try:
+                for actor in state.last_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            try:
+                for actor_group in state.multiple_bounding_box_actor:
+                    for actor in actor_group:
+                        viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+        state.multiple_bounding_box_actor.clear()
+
+        boundingbox_dict = state.multiple_boundingBox_dict
+        if state.multiple_redo_stack:
+            redo_box = state.multiple_redo_stack.pop()
+            state.multiple_undo_stack.append(redo_box)
+            slice_key = str(redo_box[4])
+            entry = boundingbox_dict.setdefault(slice_key,
+                                                {"bounding_box": [],
+                                                 "image_name": "_image_" + slice_key + ".png"})
+            entry["bounding_box"].append(redo_box)
+
+        for data in state.multiple_undo_stack:
+            if data[4] == slider.value():
+                actor_list = self.drwa_single_bounding_box(data)
+                state.multiple_bounding_box_actor.append(actor_list)
+        viewer_xy.UpdateDisplayExtent()
+        viewer_xy.Render()
 
     def label_undo(self):
-        self.viewer_XY = self.viewModel.AxialOrthoViewer.viewer
-        self.verticalSlider_XY = self.viewModel.AxialOrthoViewer.slider
+        viewer_xy = self.viewModel.AxialOrthoViewer.viewer
+        slider = self.viewModel.AxialOrthoViewer.slider
+        state = self.state_store.annotation
+
         if AnnotationEnable.pointAction.isChecked():
-            point_dict = getPointsDict()
+            point_dict = state.points_dict
             try:
-                for i in getPointsActor():
-                    self.viewer_XY.GetRenderer().RemoveActor(i)
-            except:
-                print('Close viewer_XY actor_paint Failed!!!')
-            if len(getPointsUndoStack()) > 0:
-                undo_point = getPointsUndoStack().pop()
-                setPointsRedoStack(undo_point)
+                for actor in state.points_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            if state.points_undo_stack:
+                undo_point = state.points_undo_stack.pop()
+                state.points_redo_stack.append(undo_point)
+                slice_key = str(undo_point[2])
                 point_to_remove = [undo_point[0], undo_point[1]]
-                for i, point in enumerate(point_dict[str(undo_point[2])]['points']):
-                    # 检查点的坐标是否与要删除的点匹配
-                    if point == point_to_remove:
-                        # 删除该点
-                        del point_dict[str(undo_point[2])]['points'][i]
-                        # 删除标签
-                        del point_dict[str(undo_point[2])]['label'][i]
-
-            for point in getPointsUndoStack():
-                if point[2] == self.verticalSlider_XY.value():
+                if slice_key in point_dict:
+                    for idx, point in enumerate(point_dict[slice_key]["points"]):
+                        if point == point_to_remove:
+                            del point_dict[slice_key]["points"][idx]
+                            del point_dict[slice_key]["label"][idx]
+                            break
+            for point in state.points_undo_stack:
+                if point[2] == slider.value():
                     self.point_paints(point)
-            self.viewer_XY.UpdateDisplayExtent()
-            self.viewer_XY.Render()
-        else:
-            if getSelectSingleBoxLabel():
-                try:
-                    for i in getSingleBoundingBoxActor():
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                single_boundingBox_actor = getSingleUndoStack()
-                if getSingleUndoStack() != []:
-                    setSingleRedoStack(getSingleUndoStack().pop())
-                for data in getSingleUndoStack():
-                    if data[4] == self.verticalSlider_XY.value():
-                        actor_list = self.drwa_single_bounding_box(data)
-                        setSingleBoundingBoxActor(actor_list)
-                self.viewer_XY.UpdateDisplayExtent()
-                self.viewer_XY.Render()
-            else:
-                try:
-                    for i in getSingleBoundingBoxActor():
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                try:
-                    for i in getLastBoundingBoxActor():
-                        self.viewer_XY.GetRenderer().RemoveActor(i)
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                try:
-                    for actor in getMultipleBoundingBoxActor():
-                        for i in actor:
-                            self.viewer_XY.GetRenderer().RemoveActor(i)
-                    clearMultipleBoundingBoxActor()
-                except:
-                    print('Close viewer_XY actor_paint Failed!!!')
-                bounding_box = getMultipleBoundingBoxDict()
-                if getMultipleUndoStack() != []:
-                    undo_point = getMultipleUndoStack().pop()
-                    setMultipleRedoStack(undo_point)
-                    for i, point in enumerate(bounding_box[str(undo_point[4])]['bounding_box']):
-                        # 检查点的坐标是否与要删除的点匹配
-                        if point == undo_point:
-                            # 删除该点
-                            del bounding_box[str(undo_point[4])]['bounding_box'][i]
+            viewer_xy.UpdateDisplayExtent()
+            viewer_xy.Render()
+            return
 
-                for data in getMultipleUndoStack():
-                    if data[4] == self.verticalSlider_XY.value():
-                        actor_list = self.drwa_single_bounding_box(data)
-                        setMultipleBoundingBoxActor(actor_list)
-                self.viewer_XY.UpdateDisplayExtent()
-                self.viewer_XY.Render()
+        if state.select_single_box_label:
+            try:
+                for actor in state.single_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            if state.single_undo_stack:
+                state.single_redo_stack.append(state.single_undo_stack.pop())
+            new_actor_list = []
+            for data in state.single_undo_stack:
+                if data[4] == slider.value():
+                    new_actor_list = self.drwa_single_bounding_box(data)
+            state.single_bounding_box_actor = new_actor_list
+            viewer_xy.UpdateDisplayExtent()
+            viewer_xy.Render()
+            return
+
+            try:
+                for actor in state.single_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            try:
+                for actor in state.last_bounding_box_actor:
+                    viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+            try:
+                for actor_group in state.multiple_bounding_box_actor:
+                    for actor in actor_group:
+                        viewer_xy.GetRenderer().RemoveActor(actor)
+            except Exception:
+                logger.warning('Close viewer_XY actor_paint Failed', exc_info=True)
+        state.multiple_bounding_box_actor.clear()
+
+        bounding_box_dict = state.multiple_boundingBox_dict
+        if state.multiple_undo_stack:
+            undo_point = state.multiple_undo_stack.pop()
+            state.multiple_redo_stack.append(undo_point)
+            slice_key = str(undo_point[4])
+            if slice_key in bounding_box_dict:
+                for idx, point in enumerate(bounding_box_dict[slice_key]["bounding_box"]):
+                    if point == undo_point:
+                        del bounding_box_dict[slice_key]["bounding_box"][idx]
+                        break
+
+        for data in state.multiple_undo_stack:
+            if data[4] == slider.value():
+                actor_list = self.drwa_single_bounding_box(data)
+                state.multiple_bounding_box_actor.append(actor_list)
+        viewer_xy.UpdateDisplayExtent()
+        viewer_xy.Render()
 
     def point_paints(self, point):
         self.viewer_XY = self.viewModel.AxialOrthoViewer.viewer
@@ -245,7 +259,7 @@ class AnnotationService:
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(0, 1, 0)
-        setPointsActor(actor)
+        self.state_store.annotation.points_actor.append(actor)
         self.viewer_XY.GetRenderer().AddActor(actor)
 
     def SetLine(self, point1, point2):

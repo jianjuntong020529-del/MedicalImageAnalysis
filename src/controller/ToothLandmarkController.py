@@ -10,6 +10,7 @@ from src.core.tooth_seg_landmark_prior.Tooth_Alveolar_Construction import Step1_
 from src.interactor_style.ToothLandmarkInteractorStyle import LeftButtonPressEvent
 from src.model.BaseModel import BaseModel
 from src.ui.LoadToothSegWindow import LoadToothSegWindow
+from src.ui.LoadAlveolarSegWindow import LoadAlveolarSegWindow
 from src.utils.globalVariables import getPaintActors, getUndoStack, setPaintActor, clearColorIndexList, \
     clearPaintActors, clearUndoStack, getColorIndexList, setRedoStack, getRedoStack, setUndoStack, setColorIndexList, \
     getDirPath
@@ -41,7 +42,8 @@ class ToothLandmarkController(ToothLandmarkWidget):
         self.pushButton_save.clicked.connect(self.save)
         self.pushButton_segmentation.clicked.connect(self.segmentation)
 
-        self.pushButton_loadSegmentationResult.clicked.connect(self.load_segmentation_result)
+        self.pushButton_load_alveolar_segResult.clicked.connect(self.load_alveolar_segmentation_result)
+        self.pushButton_load_tooth_segResult.clicked.connect(self.load_tooth_segmentation_result)
 
     def valuechange(self):
         viewer = self.axialViewer.viewer
@@ -246,8 +248,14 @@ class ToothLandmarkController(ToothLandmarkWidget):
                                      ParamConstant.EROSION_RADIUS_UP, ParamConstant.EROSION_RADIUS_LOW)
         info.exec_()
 
-    def load_segmentation_result(self):
-        print("load segmentation result")
+    def load_alveolar_segmentation_result(self):
+        print("load alveolar segmentation result")
+        self.load_alveolar_seg_window = LoadAlveolarSegWindow(self.baseModelClass)
+        self.load_alveolar_seg_window.show()
+        self.load_alveolar_seg_window.LoadSTL()
+
+    def load_tooth_segmentation_result(self):
+        print("load tooth segmentation result")
         self.load_tooth_seg_window = LoadToothSegWindow(self.baseModelClass)
         self.load_tooth_seg_window.show()
         self.load_tooth_seg_window.LoadSTL()
@@ -269,6 +277,12 @@ class ToothLandmarkController(ToothLandmarkWidget):
         point_x = point[2] * spacing[0] + origin[0]
         point_y = point[3] * spacing[1] + origin[1]
         print(label_color, label_id, point_x, point_y, point_z)
+        
+        # 如果没有找到对应的颜色，使用默认颜色
+        if label_color is None:
+            label_color = "#FFFFFF"  # 默认白色
+            print(f"Warning: No color found for label_id {label_id}, using default white color")
+        
         square = vtk.vtkPolyData()
         points = vtk.vtkPoints()
         points.InsertNextPoint(point_x - 0.5, point_y + 0.5, point_z)
@@ -301,11 +315,25 @@ class ToothLandmarkController(ToothLandmarkWidget):
         self.viewer_XY.GetRenderer().AddActor(actor)
 
     def hex_to_rgb(self, hex_color):
-        hex_color = hex_color.lstrip('#')
-        r = int(hex_color[0:2], 16) / 255.0
-        g = int(hex_color[2:4], 16) / 255.0
-        b = int(hex_color[4:6], 16) / 255.0
-        return r, g, b
+        """将十六进制颜色转换为RGB值"""
+        if hex_color is None:
+            # 如果颜色为None，返回白色
+            return 1.0, 1.0, 1.0
+        
+        try:
+            hex_color = hex_color.lstrip('#')
+            if len(hex_color) != 6:
+                # 如果颜色格式不正确，返回白色
+                print(f"Warning: Invalid hex color format '{hex_color}', using white")
+                return 1.0, 1.0, 1.0
+            
+            r = int(hex_color[0:2], 16) / 255.0
+            g = int(hex_color[2:4], 16) / 255.0
+            b = int(hex_color[4:6], 16) / 255.0
+            return r, g, b
+        except (ValueError, AttributeError) as e:
+            print(f"Error converting hex color '{hex_color}': {e}, using white")
+            return 1.0, 1.0, 1.0
 
     @staticmethod
     def message_info_dialog(title, text):

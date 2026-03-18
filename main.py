@@ -2,9 +2,11 @@
 import sys
 from PyQt5 import QtWidgets
 from src.ui.MainWindow import Ui_MainWindow
+from src.utils.logger import configure_logging
 
 
 def main():
+    configure_logging()
     app = QtWidgets.QApplication(sys.argv)
     widget = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()

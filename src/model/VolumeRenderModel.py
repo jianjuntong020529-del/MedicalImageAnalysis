@@ -29,3 +29,4 @@ class VolumeRender:
     actor_anchor_8 = None
 
     actor_stl = None
+    actor_stl_list = []  # 用于存储多个STL模型的actor列表

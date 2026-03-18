@@ -1,0 +1,12 @@
+# NIfTI分割编辑功能所需依赖包
+# 请使用以下命令安装：pip install -r requirements_nifti_editor.txt
+
+# 核心医学影像处理库
+nibabel>=5.0.0          # NIfTI文件读写
+SimpleITK>=2.2.0        # 医学影像处理（可选，用于高级重采样）
+
+# 图像处理
+opencv-python>=4.8.0    # 图像融合和处理
+numpy>=1.24.0           # 数值计算
+
+# 注意：PyQt5已在项目中使用，无需额外安装

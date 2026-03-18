@@ -1,27 +1,10 @@
-﻿/.idea/**
+/.idea/**
 /output/**
-/resources/checkpoints/**
-/resources/CAVASS/**
 /resources/**
-/src/logs/app.log
+/.claude/**
+docs/**
 
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-dist/
-build/
-venv/
-env/
-
-# 忽略 __init__.py（谨慎使用）
 __init__.py
-__init__.pyc
-
-# IDE 配置文件
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
+*.pyc
+src/logs/app.log
+*.npy

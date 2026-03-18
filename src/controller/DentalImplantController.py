@@ -24,8 +24,11 @@ from src.model.ToothImplantListModel import ToothImplantList
 from src.model.VolumeRenderModel import VolumeRender
 from src.service.ToolBarService import ToolBarService
 from src.style.FontStyle import Font
-from src.utils.globalVariables import *
+from src.utils.state_store import get_state_store
+from src.utils.logger import get_logger
 from src.widgets.ImplantWidget import ImplantWidget
+
+logger = get_logger(__name__)
 
 
 class DentalImplantController(ImplantWidget):
@@ -36,6 +39,7 @@ class DentalImplantController(ImplantWidget):
         self.viewModel = viewModel
         self.widget = widget
         self.toolBarController = toolBarController
+        self.state_store = get_state_store()
         self.init_widget()
 
         # ---------------植体放置2D图参数---------------------------------------------
@@ -142,31 +146,31 @@ class DentalImplantController(ImplantWidget):
 
     def implant_place(self):
         self.init_update_viewer_information()
-        print("！！！ 放置植体 ！！！")
+        logger.info("开始放置植体")
         # -----------------------------------------------------------
         try:
             self.renderer_volume.RemoveActor(VolumeRender.actor_implant)
-        except:
-            print('Close implant Actors Failed!!!')
+        except Exception:
+            logger.warning("关闭已有植体体渲染失败", exc_info=True)
         try:
             for actor in VolumeRender.actor_implant_reg:
                 self.renderer_volume.RemoveActor(actor)
-        except:
-            print("close actor_implant_reg failed")
+        except Exception:
+            logger.warning("关闭植体配准 actor 失败", exc_info=True)
         # -----------------------------------------------------------
-        if getFileIsEmpty():
-            print("未导入文件，不能放置植体")
+        if self.state_store.get("file", "file_is_empty"):
+            logger.warning("未导入文件，不能放置植体")
             return
         if not ToolBarEnable.crosshair_enable:
             api = self.implant_information()
             if api == QMessageBox.AcceptRole:
-                print("选择了确认")
+                logger.info("用户确认开启十字线")
                 self.toolBarController.action_crosshair.setChecked(True)
                 self.toolBarController.on_action_crosshair()
             elif api == QMessageBox.RejectRole:
-                print("选择了取消")
+                logger.info("用户取消放置植体")
                 return
-        setIsPutImplant(True)
+        self.state_store.set("implant", "is_put_implant", True)
         # ------------------------------------------------------------------------------
         self.horizontalSlider_implant_angle_XY.setValue(0)
         self.horizontalSlider_implant_angle_YZ.setValue(0)
@@ -213,11 +217,11 @@ class DentalImplantController(ImplantWidget):
         Xangle = np.absolute(self.viewer_XZ.GetResliceCursor().GetXAxis()[0])
         Yangle = np.absolute(self.viewer_XY.GetResliceCursor().GetYAxis()[1])
         Zangle = np.absolute(self.viewer_YZ.GetResliceCursor().GetZAxis()[2])
-        print([Xangle, Yangle, Zangle])
+        logger.debug("reslice cursor axes: %s", [Xangle, Yangle, Zangle])
         # --------------------------------------------------------------------------------
         framewidth = self.vtkWidget_XY.frameSize().width()
         frameheight = self.vtkWidget_XY.frameSize().height()
-        print([frameheight, framewidth])
+        logger.debug("frame size: height=%s width=%s", frameheight, framewidth)
         # -----------------centerpoint---------------------------------------------------
         vc = vtk.vtkCoordinate()
         vc.SetCoordinateSystemToWorld()
@@ -463,115 +467,55 @@ class DentalImplantController(ImplantWidget):
         # --------------------------------------------------------------------------------------
         matrix, transformed, cost = trimesh.registration.icp(source_vertices, target_mesh.vertices,
                                                              max_iterations=5000, reflection=True, scale=False)
-        print('Cost is ' + str(cost))
+        logger.info("ICP cost: %s", cost)
         vertices_trans = trimesh.transform_points(source_vertices, matrix)
         implant_mesh = trimesh.Trimesh(vertices_trans, source_mesh.faces, validate=True)
         implant_mesh.export(self.toothimplant_temp_file_path)
         # ------------------------------------------------------------------------------------
         try:
             self.renderer_volume.RemoveActor(VolumeRender.actor_mold_origin)
-        except:
-            print('actor_mold_origin is not found!!!')
+        except Exception:
+            logger.warning('actor_mold_origin is not found', exc_info=True)
 
         try:
             self.renderer_volume.RemoveActor(VolumeRender.actor_implant)
-        except:
-            print('actor_implant is not found!!!')
+        except Exception:
+            logger.warning('actor_implant is not found', exc_info=True)
 
         try:
             self.renderer_volume.RemoveActor(VolumeRender.actor_implant_reg)
-        except:
-            print('Close Implant_reg Actors Failed!!!')
+        except Exception:
+            logger.warning('Close Implant_reg Actors Failed', exc_info=True)
 
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_reg)
-        except:
-            print('actor_implant_reg is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_1)
-        except:
-            print('actor_ld_1 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_2)
-        except:
-            print('actor_ld_2 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_3)
-        except:
-            print('actor_ld_3 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_4)
-        except:
-            print('actor_ld_4 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_5)
-        except:
-            print('actor_ld_5 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_6)
-        except:
-            print('actor_ld_6 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_7)
-        except:
-            print('actor_ld_8 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_ld_8)
-        except:
-            print('actor_ld_8 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_1)
-        except:
-            print('actor_anchor_1 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_2)
-        except:
-            print('actor_anchor_2 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_3)
-        except:
-            print('actor_anchor_3 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_4)
-        except:
-            print('actor_anchor_4 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_5)
-        except:
-            print('actor_anchor_5 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_6)
-        except:
-            print('actor_anchor_6 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_7)
-        except:
-            print('actor_anchor_7 is not found!!!')
-
-        try:
-            self.renderer_volume.RemoveActor(VolumeRender.actor_anchor_8)
-        except:
-            print('actor_anchor_8 is not found!!!')
+        for actor_attr in [
+            "actor_ld_reg",
+            "actor_ld_1",
+            "actor_ld_2",
+            "actor_ld_3",
+            "actor_ld_4",
+            "actor_ld_5",
+            "actor_ld_6",
+            "actor_ld_7",
+            "actor_ld_8",
+            "actor_anchor_1",
+            "actor_anchor_2",
+            "actor_anchor_3",
+            "actor_anchor_4",
+            "actor_anchor_5",
+            "actor_anchor_6",
+            "actor_anchor_7",
+            "actor_anchor_8",
+        ]:
+            try:
+                actor = getattr(VolumeRender, actor_attr)
+                self.renderer_volume.RemoveActor(actor)
+            except Exception:
+                logger.debug("%s is not found when removing actors", actor_attr, exc_info=True)
 
         try:
             self.renderer_volume.AddActor(VolumeRender.volume_cbct)
-        except:
-            print('volume_cbct is not found!!!')
+        except Exception:
+            logger.warning('volume_cbct is not found', exc_info=True)
         self.vtkWidget_Volume.Render()
         # ------------------------------------------------------------------------------------
         self.reader_toothimplant = vtk.vtkSTLReader()
@@ -613,21 +557,21 @@ class DentalImplantController(ImplantWidget):
 
     def implant_3D_adjust(self):
         self.init_update_viewer_information()
-        if not getIsPutImplant():
-            print("未放置植体，还不能移动滑块")
+        if not self.state_store.get("implant", "is_put_implant"):
+            logger.warning("未放置植体，不能进行微调滑块操作")
             return
-        print('植体微调完成！！！')
+        logger.info('植体微调完成')
         try:
             self.renderer_volume.RemoveActor(VolumeRender.actor_implant)
-        except:
-            print('actor_implant is not found!!!')
+        except Exception:
+            logger.warning('actor_implant is not found', exc_info=True)
         # --------------------------------------------------------------------------------------------------------------
         self.toothimplant_file_path = ParamConstant.OUTPUT_FILE_PATH + ParamConstant.SUBJECT_NAME + '_' + self.ToothID_QComboBox.currentText() + '_' + self.ToothImplant_QComboBox.currentText() + '_tooth_implant.stl'
         # ---------------------------------------------------------
         self.move_X = self.horizontalSlider_implant_move_Xaxis.value() / 10
         self.move_Y = self.horizontalSlider_implant_move_Yaxis.value() / 10
         self.move_Z = self.horizontalSlider_implant_move_Zaxis.value() / 10
-        print([self.move_X, self.move_Y, self.move_Z])
+        logger.debug("Implant move delta: %s", [self.move_X, self.move_Y, self.move_Z])
         # ----------------------------------------------
         transform = vtk.vtkTransform()
         center_pos = VolumeRender.actor_implant.GetCenter()
@@ -663,7 +607,7 @@ class DentalImplantController(ImplantWidget):
         self.vtkWidget_YZ.Render()
         self.vtkWidget_XZ.Render()
         self.vtkWidget_Volume.Render()
-        setIsPutImplant(False)
+        self.state_store.set("implant", "is_put_implant", False)
 
     def ToothID_Implant_QListView_Func(self):
         index = self.ToothID_Implant_QListView.currentIndex().row()
@@ -676,8 +620,8 @@ class DentalImplantController(ImplantWidget):
 
     def horizontalSlider_implant_XY_angle_valuechange(self):
         # 判断是否点击了放置植体的面
-        if not getIsPutImplant():
-            print("未放置植体，还不能移动滑块")
+        if not self.state_store.get("implant", "is_put_implant"):
+            logger.warning("未放置植体，不能调整 XY 角度")
             return
         self.init_update_viewer_information()
         # ----------------------------------------------------
@@ -700,13 +644,13 @@ class DentalImplantController(ImplantWidget):
         self.drawing_XY.Update()
         self.viewer_XY.Render()
         # ---------------------------------------------------------------------------
-        print([self.rotation_angle_X, self.rotation_angle_Y, self.rotation_angle_Z])
+        logger.debug("Rotation angles XYZ: %s", [self.rotation_angle_X, self.rotation_angle_Y, self.rotation_angle_Z])
         # ----------------------------------------------
         # ---------------------------------------------------------
         self.move_X = self.horizontalSlider_implant_move_Xaxis.value() / 10
         self.move_Y = self.horizontalSlider_implant_move_Yaxis.value() / 10
         self.move_Z = self.horizontalSlider_implant_move_Zaxis.value() / 10
-        print([self.move_X, self.move_Y, self.move_Z])
+        logger.debug("Implant move delta: %s", [self.move_X, self.move_Y, self.move_Z])
         # ----------------------------------------------
         transform = vtk.vtkTransform()
         center_pos = VolumeRender.actor_implant.GetCenter()
@@ -724,8 +668,8 @@ class DentalImplantController(ImplantWidget):
     def horizontalSlider_implant_YZ_angle_valuechange(self):
         self.init_update_viewer_information()
         # 判断是否点击了放置植体的面
-        if not getIsPutImplant():
-            print("未放置植体，还不能移动滑块")
+        if not self.state_store.get("implant", "is_put_implant"):
+            logger.warning("未放置植体，不能调整 YZ 角度")
             return
         # ------------------------------------------------------------------------------
         self.horizontalSlider_implant_angle_YZ.setToolTip(str(self.horizontalSlider_implant_angle_YZ.value()))
@@ -758,13 +702,13 @@ class DentalImplantController(ImplantWidget):
         self.drawing_YZ.Update()
         self.viewer_YZ.Render()
         # ---------------------------------------------------------------------------
-        print([self.rotation_angle_X, self.rotation_angle_Y, self.rotation_angle_Z])
+        logger.debug("Rotation angles XYZ: %s", [self.rotation_angle_X, self.rotation_angle_Y, self.rotation_angle_Z])
         # ----------------------------------------------
         # ---------------------------------------------------------
         self.move_X = self.horizontalSlider_implant_move_Xaxis.value() / 10
         self.move_Y = self.horizontalSlider_implant_move_Yaxis.value() / 10
         self.move_Z = self.horizontalSlider_implant_move_Zaxis.value() / 10
-        print([self.move_X, self.move_Y, self.move_Z])
+        logger.debug("Implant move delta: %s", [self.move_X, self.move_Y, self.move_Z])
         # ----------------------------------------------
         transform = vtk.vtkTransform()
         center_pos = VolumeRender.actor_implant.GetCenter()
@@ -782,8 +726,8 @@ class DentalImplantController(ImplantWidget):
     def horizontalSlider_implant_XZ_angle_valuechange(self):
         self.init_update_viewer_information()
         # 判断是否点击了放置植体的面
-        if not getIsPutImplant():
-            print("未放置植体，还不能移动滑块")
+        if not self.state_store.get("implant", "is_put_implant"):
+            logger.warning("未放置植体，不能调整 XZ 角度")
             return
         # -------------------------------------------------------------------------------
         self.horizontalSlider_implant_angle_XZ.setToolTip(str(self.horizontalSlider_implant_angle_XZ.value()))
@@ -816,14 +760,14 @@ class DentalImplantController(ImplantWidget):
         self.drawing_XZ.Update()
         self.viewer_XZ.Render()
         # ------------------------------------------------------------------------
-        print([self.rotation_angle_X, self.rotation_angle_Y, self.rotation_angle_Z])
+        logger.debug("Rotation angles XYZ: %s", [self.rotation_angle_X, self.rotation_angle_Y, self.rotation_angle_Z])
         # ----------------------------------------------
         # ----------------------------------------------
         # ---------------------------------------------------------
         self.move_X = self.horizontalSlider_implant_move_Xaxis.value() / 10
         self.move_Y = self.horizontalSlider_implant_move_Yaxis.value() / 10
         self.move_Z = self.horizontalSlider_implant_move_Zaxis.value() / 10
-        print([self.move_X, self.move_Y, self.move_Z])
+        logger.debug("Implant move delta: %s", [self.move_X, self.move_Y, self.move_Z])
         # ----------------------------------------------
         transform = vtk.vtkTransform()
         center_pos = VolumeRender.actor_implant.GetCenter()
@@ -842,8 +786,8 @@ class DentalImplantController(ImplantWidget):
     def horizontalSlider_implant_move_Axis_valuechange(self):
         self.init_update_viewer_information()
         # 判断是否点击了放置植体的面
-        if not getIsPutImplant():
-            print("未放置植体，还不能移动滑块")
+        if not self.state_store.get("implant", "is_put_implant"):
+            logger.warning("未放置植体，不能进行平移滑块操作")
             return
         # ---------------------------------------------------------
         self.move_X = self.horizontalSlider_implant_move_Xaxis.value() / 10
@@ -852,24 +796,24 @@ class DentalImplantController(ImplantWidget):
         self.horizontalSlider_implant_move_Yaxis.setToolTip(str(self.move_Y))
         self.move_Z = self.horizontalSlider_implant_move_Zaxis.value() / 10
         self.horizontalSlider_implant_move_Zaxis.setToolTip(str(self.move_Z))
-        print([self.move_X, self.move_Y, self.move_Z])
+        logger.debug("Implant move delta: %s", [self.move_X, self.move_Y, self.move_Z])
         # ---------------------------------------------------------------
-        print('计算画布位置开始：')
+        logger.debug('计算画布位置开始')
         cursorposition_ori = self.viewer_XY.GetResliceCursor().GetCenter()
         x = cursorposition_ori[0] + self.move_X
         y = cursorposition_ori[1] + self.move_Y
         z = cursorposition_ori[2] + self.move_Z
         cursorposition = [x, y, z]
-        print('cursorposition', cursorposition)
+        logger.debug('cursorposition %s', cursorposition)
         # --------------------------------------------------------------------------------
         Xangle = np.absolute(self.viewer_XZ.GetResliceCursor().GetXAxis()[0])
         Yangle = np.absolute(self.viewer_XY.GetResliceCursor().GetYAxis()[1])
         Zangle = np.absolute(self.viewer_YZ.GetResliceCursor().GetZAxis()[2])
-        print([Xangle, Yangle, Zangle])
+        logger.debug("reslice cursor axes: %s", [Xangle, Yangle, Zangle])
         # --------------------------------------------------------------------------------
         framewidth = self.vtkWidget_XY.frameSize().width()
         frameheight = self.vtkWidget_XY.frameSize().height()
-        print([frameheight, framewidth])
+        logger.debug("frame size: height=%s width=%s", frameheight, framewidth)
         # -----------------centerpoint---------------------------------------------------
         vc = vtk.vtkCoordinate()
         vc.SetCoordinateSystemToWorld()

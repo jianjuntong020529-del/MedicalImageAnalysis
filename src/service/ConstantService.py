@@ -1,6 +1,7 @@
 from src.model.BaseModel import BaseModel
 from src.model.OrthoViewerModel import OrthoViewerModel
 from src.model.ToolBarWidgetModel import ToolBarWidget
+import vtk
 
 class ContrastService:
     def __init__(self, baseModelClass: BaseModel, viewModel: OrthoViewerModel):
@@ -10,7 +11,8 @@ class ContrastService:
     def LevelAndWidth(self):
         scalarRange = self.baseModelClass.scalerRange
         window = (scalarRange[1] - scalarRange[0])
-        level = (scalarRange[0] + scalarRange[1]) / 5.0
+        # 窗位应该设置在数据范围的中心点，这样可以正确显示整个灰度范围
+        level = (scalarRange[0] + scalarRange[1]) / 2.0
         return window, level
 
     def adjust_window_width_and_level(self):
@@ -31,8 +33,10 @@ class ContrastService:
         for viewer in viewers:
             viewer.SetColorLevel(ToolBarWidget.contrast_widget.window_level_slider.value())
             viewer.SetColorWindow(ToolBarWidget.contrast_widget.window_width_slider.value())
-            viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().SetWindowLevel(
-                ToolBarWidget.contrast_widget.window_width_slider.value(), ToolBarWidget.contrast_widget.window_level_slider.value())
+            # 检查是否为 vtkImageViewer2 类型，如果是则跳过 GetResliceCursorWidget 调用
+            if not isinstance(viewer, vtk.vtkImageViewer2) and hasattr(viewer, 'GetResliceCursorWidget'):
+                viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().SetWindowLevel(
+                    ToolBarWidget.contrast_widget.window_width_slider.value(), ToolBarWidget.contrast_widget.window_level_slider.value())
             viewer.Render()
 
     def levelSliderValueChange(self):
@@ -47,8 +51,10 @@ class ContrastService:
         for viewer in viewers:
             viewer.SetColorLevel(ToolBarWidget.contrast_widget.window_level_slider.value())
             viewer.SetColorWindow(ToolBarWidget.contrast_widget.window_width_slider.value())
-            viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().SetWindowLevel(
-                ToolBarWidget.contrast_widget.window_width_slider.value(), ToolBarWidget.contrast_widget.window_level_slider.value())
+            # 检查是否为 vtkImageViewer2 类型，如果是则跳过 GetResliceCursorWidget 调用
+            if not isinstance(viewer, vtk.vtkImageViewer2) and hasattr(viewer, 'GetResliceCursorWidget'):
+                viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().SetWindowLevel(
+                    ToolBarWidget.contrast_widget.window_width_slider.value(), ToolBarWidget.contrast_widget.window_level_slider.value())
             viewer.Render()
 
 

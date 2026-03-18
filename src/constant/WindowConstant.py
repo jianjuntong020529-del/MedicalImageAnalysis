@@ -10,11 +10,13 @@ class WindowConstant:
     SAM_MED2D_SEG = "SAM-Med2D 分割"
     ADD_DICOM = "导入DICOM文件"
     ADD_IM0 = "导入IM0文件"
-    ADD_NPY = "导入npy文件"
+    ADD_NIFIT = "导入nii.gz文件"
+    ADD_NPY = "导入NPY文件"
     ADD_STL = "导入STL文件"
 
     ACTION_GENERATE_PANORMAIC = "口腔全景图像"
     ACTION_TOOTH_LANDMARK_ANNOTATION = "牙齿标记"
+    ACTION_CORONAL_CANAL_ANNOTATION = "冠状面下颌管标注"
     ACTION_IMPLANT_TOOLBAR = "打开植体工具栏"
     ACTION_REGISTRATION_TOOLBAR = "打开配准工具栏"
     ACTION_PARAMETERS_TOOLBAR = "打开参数计算工具栏"
@@ -118,16 +120,31 @@ class WindowConstant:
     GENERATE_PANORMAIC_INFO_TEXT = "牙弓曲线未保存，请先保存！"
 
     # 牙齿标志点标注
-    TOOTH_LABELS_WIDGET = "Labels"
+    # TOOTH_LABELS_WIDGET = "Labels"
+    # FDI_LABEL = "FDI: "
+    # TOOTH_LANDMARK_PAINT_BUTTON = "Paint"
+    # TOOTH_LANDMARK_CLEAR_BUTTON = "Clear"
+    # TOOTH_LANDMARK_UNDO_BUTTON = "Undo"
+    # TOOTH_LANDMARK_REDO_BUTTON = "Redo"
+    # TOOTH_LANDMARK_LOAD_BUTTON = "Load"
+    # TOOTH_LANDMARK_SAVE_BUTTON = "Save"
+    # TOOTH_LANDMARK_Segmentation_BUTTON = "Segmentation"
+    # TOOTH_LANDMARK_LOAD_RESULT_BUTTON = "Load Segmentation Result"
+    
+    TOOTH_LABELS_WIDGET = "标签"
     FDI_LABEL = "FDI: "
-    TOOTH_LANDMARK_PAINT_BUTTON = "Paint"
-    TOOTH_LANDMARK_CLEAR_BUTTON = "Clear"
-    TOOTH_LANDMARK_UNDO_BUTTON = "Undo"
-    TOOTH_LANDMARK_REDO_BUTTON = "Redo"
-    TOOTH_LANDMARK_LOAD_BUTTON = "Load"
-    TOOTH_LANDMARK_SAVE_BUTTON = "Save"
-    TOOTH_LANDMARK_Segmentation_BUTTON = "Segmentation"
-    TOOTH_LANDMARK_LOAD_RESULT_BUTTON = "Load Segmentation Result"
+    TOOTH_LANDMARK_PAINT_BUTTON = "画笔"
+    TOOTH_LANDMARK_CLEAR_BUTTON = "清除"
+    TOOTH_LANDMARK_UNDO_BUTTON = "撤销"
+    TOOTH_LANDMARK_REDO_BUTTON = "回退"
+    TOOTH_LANDMARK_LOAD_BUTTON = "加载"
+    TOOTH_LANDMARK_SAVE_BUTTON = "保存"
+    TOOTH_LANDMARK_Segmentation_BUTTON = "分割"
+    TOOTH_LANDMARK_LOAD_ALVEOLAR_RESULT_BUTTON = "加载颌骨分割结果"
+    TOOTH_LANDMARK_LOAD_TOOTH_RESULT_BUTTON = "加载牙齿分割结果"
+
+    # NIfTI分割编辑
+    ACTION_NIFTI_SEGMENTATION_EDITOR = "NIfTI分割结果编辑"
 
 
 

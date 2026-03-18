@@ -10,7 +10,7 @@ from src.model.BaseModel import BaseModel
 from src.utils.globalVariables import getDirPath
 
 
-class LoadToothSegWindow(QWidget):
+class LoadAlveolarSegWindow(QWidget):
     def __init__(self, baseModelClass: BaseModel):
         super().__init__()
 
@@ -42,70 +42,69 @@ class LoadToothSegWindow(QWidget):
         self.vtkWidget.Render()
 
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("Widget", "牙齿分割结果"))
+        self.setWindowTitle(_translate("Widget", "颌骨分割结果"))
 
     def LoadSTL(self):
         print("subject_name: " + ParamConstant.ANNOTATION_SUBJECT_NAME)
         path = ParamConstant.OUTPUT_FILE_PATH + ParamConstant.ANNOTATION_SUBJECT_NAME
         data_names = os.listdir(path)
+        
+        # 查找颌骨分割的STL文件
+        subject_name = ParamConstant.ANNOTATION_SUBJECT_NAME
+        lower_alveolar_file = subject_name + "_LowerAl.stl"
+        upper_alveolar_file = subject_name + "_UpperAl.stl"
+        
+        # 检查文件是否存在并添加到路径列表
         for data_name in data_names:
             if os.path.splitext(data_name)[1] == '.stl':
-                list = data_name.split("_")
-                if len(list) > 2 and list[0] == ParamConstant.ANNOTATION_SUBJECT_NAME:
+                if data_name == lower_alveolar_file or data_name == upper_alveolar_file:
                     self.stl_path.append(data_name)
-        print(self.stl_path)
-
-        # 创建颜色映射字典：牙齿标号 -> 颜色
-        tooth_color_map = {}
-        for color_hex, tooth_id in ParamConstant.COLOR_DATA:
-            if color_hex:  # 跳过空颜色（标题行）
-                tooth_color_map[tooth_id] = color_hex
         
-        print(f"颜色映射表: {tooth_color_map}")
+        print("Found alveolar STL files:", self.stl_path)
+
+        # 获取图像边界用于变换
+        bounds = self.baseModelClass.bounds
+        self.center0 = (bounds[1] + bounds[0]) / 2.0
+        self.center1 = (bounds[3] + bounds[2]) / 2.0
+        self.center2 = (bounds[5] + bounds[4]) / 2.0
+        
+        # 设置交互样式
+        self.reader_stl_iren.SetInteractorStyle(self.reader_stl_style)
 
         for filename in self.stl_path:
-            # 从文件名中提取牙齿标号
-            # 例如: '04_LowerTooth_31.stl' -> '31'
-            # 或: '04_UpperTooth_11.stl' -> '11'
-            tooth_number = None
-            parts = filename.replace('.stl', '').split('_')
-            if len(parts) >= 3:
-                tooth_number = parts[-1]  # 获取最后一部分作为牙齿标号
+            full_filename = path + "/" + filename
             
-            print(f"文件: {filename}, 牙齿标号: {tooth_number}")
-            
-            # 获取对应的颜色
-            color_hex = tooth_color_map.get(tooth_number, "#808080")  # 默认灰色
-            
-            # 将十六进制颜色转换为 RGB (0-1 范围)
-            color_hex = color_hex.lstrip('#')
-            r = int(color_hex[0:2], 16) / 255.0
-            g = int(color_hex[2:4], 16) / 255.0
-            b = int(color_hex[4:6], 16) / 255.0
-            
-            print(f"  使用颜色: {color_hex} -> RGB({r:.2f}, {g:.2f}, {b:.2f})")
-            
-            filename_full = path + "/" + filename
-            bounds = self.baseModelClass.bounds
-            self.center0 = (bounds[1] + bounds[0]) / 2.0
-            self.center1 = (bounds[3] + bounds[2]) / 2.0
-            self.center2 = (bounds[5] + bounds[4]) / 2.0
+            # 创建变换
             transform = vtk.vtkTransform()
             transform.Translate(self.center0, self.center1, self.center2)
+            
+            # 读取STL文件
             reader = vtk.vtkSTLReader()
-            reader.SetFileName(filename_full)
+            reader.SetFileName(full_filename)
+            
+            # 创建映射器
             mapper = vtk.vtkPolyDataMapper()
             mapper.SetInputConnection(reader.GetOutputPort())
+            
+            # 创建演员
             actor = vtk.vtkLODActor()
             actor.SetMapper(mapper)
             actor.SetUserTransform(transform)
             
-            # 设置颜色
-            actor.GetProperty().SetColor(r, g, b)
+            # 根据文件名设置颜色
+            if filename == lower_alveolar_file:
+                # 下颌骨设置为绿色 (89,121,89)
+                actor.GetProperty().SetColor(89/255.0, 121/255.0, 89/255.0)
+                print(f"Setting {filename} to green color")
+            elif filename == upper_alveolar_file:
+                # 上颌骨设置为黄色 (223,196,45)
+                actor.GetProperty().SetColor(223/255.0, 196/255.0, 45/255.0)
+                print(f"Setting {filename} to yellow color")
             
-            self.reader_stl_iren.SetInteractorStyle(self.reader_stl_style)
+            # 添加到渲染器
             self.reader_stl_renderer.AddActor(actor)
         
+        # 渲染和初始化
         self.vtkWidget.Render()
         self.reader_stl_renderer.ResetCamera()
         self.reader_stl_iren.Initialize()

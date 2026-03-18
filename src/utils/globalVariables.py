@@ -1,716 +1,615 @@
-# 数据加载路劲
-dirpath = " "
-count = 1
-state = False
-startPoint = ()
-endPoint = ()
-start_poly_point=()
-end_poly_point=()
-state_poly=False
-state2 = False  # 检测鼠标移动是否实在鼠标点击之后
-long = 0
-width = 0
-fourPoints = []
-slice_xy = 0
-slice_yz = 0
-slice_xz = 0
-actors_paint = []
-file_is_empty = True
-is_put_implant = False
-is_generate_implant = False
-is_adjust = False
-anchor_point_is_complete = False
-dental_arch_curve_points = []
-dental_arch_thickness = "80"
-dicom_points = []
-control_points = []
-paint_points = []
-sample_points = []
-point_position = []
-select_point_label_1 = True
-select_single_box_label = True
-left_button_down = False
-single_bounding_box = []
-multiple_bounding_box = []
-multiple_bounding_box_original = []
-box_points_original = []
-single_bounding_box_actor = []
-multiple_bounding_box_actor = []
-last_bounding_box_actor = []
-points_actor = []
-points_undo_stack = []
-points_redo_stack = []
-points_dict = {}
-single_undo_stack = []
-single_redo_stack = []
-single_boudingBox_dict = {}
-multiple_undo_stack = []
-multiple_redo_stack = []
-multiple_boundingBox_dict ={}
-control_roi_point = {}
+from typing import Any
 
-left_down_is_clicked = False
-left_mid_is_clicked = False
-left_up_is_clicked = False
-down_mid_is_clicked = False
-up_mid_is_clicked = False
-right_down_is_clicked = False
-right_mid_is_clicked = False
-right_up_is_clicked = False
-mid_is_clicked = False
+from src.utils.state_store import get_state_store
+
+_STATE = get_state_store()
 
 
-actors = []
-undo_stack = []
-redo_stack = []
-color_index_list = []
+# ---------------------------------------------------------------------------
+# Paint view state
+# ---------------------------------------------------------------------------
+def setColorIndexList(index: int):
+    _STATE.append_unique("paint", "color_index_list", index)
 
-def setColorIndexList(index):
-    global color_index_list
-    if index not in color_index_list:
-        color_index_list.append(index)
 
 def getColorIndexList():
-    global color_index_list
-    return color_index_list
+    return _STATE.get("paint", "color_index_list")
+
 
 def clearColorIndexList():
-    global color_index_list
-    color_index_list = []
+    _STATE.clear_collection("paint", "color_index_list")
 
-def setPaintActor(actor):
-    global actors
-    actors.append(actor)
+
+def setPaintActor(actor: Any):
+    _STATE.append("paint", "actors", actor)
+
 
 def getPaintActors():
-    global actors
-    return actors
+    return _STATE.get("paint", "actors")
+
 
 def clearPaintActors():
-    global actors
-    actors = []
-def setUndoStack(stack):
-    global undo_stack
-    undo_stack.append(stack)
+    _STATE.clear_collection("paint", "actors")
+
+
+def setUndoStack(stack: Any):
+    _STATE.append("paint", "undo_stack", stack)
+
 
 def getUndoStack():
-    global undo_stack
-    return undo_stack
+    return _STATE.get("paint", "undo_stack")
+
 
 def clearUndoStack():
-    global undo_stack
-    undo_stack = []
+    _STATE.clear_collection("paint", "undo_stack")
 
-def setRedoStack(stack):
-    global redo_stack
-    redo_stack.append(stack)
+
+def setRedoStack(stack: Any):
+    _STATE.append("paint", "redo_stack", stack)
+
 
 def getRedoStack():
-    global redo_stack
-    return redo_stack
+    return _STATE.get("paint", "redo_stack")
 
 
-def get_left_down_is_clicked():
-    global left_down_is_clicked
-    return left_down_is_clicked
+def clearRedoStack():
+    _STATE.clear_collection("paint", "redo_stack")
 
 
-def get_left_mid_is_clicked():
-    global left_mid_is_clicked
-    return left_mid_is_clicked
-
-
-def get_left_up_is_clicked():
-    global left_up_is_clicked
-    return left_up_is_clicked
-
-
-def get_down_mid_is_clicked():
-    global down_mid_is_clicked
-    return down_mid_is_clicked
-
-
-def get_up_mid_is_clicked():
-    global up_mid_is_clicked
-    return up_mid_is_clicked
-
-
-def get_right_down_is_clicked():
-    global right_down_is_clicked
-    return right_down_is_clicked
-
-
-def get_right_mid_is_clicked():
-    global right_mid_is_clicked
-    return right_mid_is_clicked
-
-
-def get_right_up_is_clicked():
-    global right_up_is_clicked
-    return right_up_is_clicked
-
-
-def get_mid_is_clicked():
-    global mid_is_clicked
-    return mid_is_clicked
-
-
-
-
-def set_left_down_is_clicked(value):
-    global left_down_is_clicked
-    left_down_is_clicked = value
-
-
-def set_left_mid_is_clicked(value):
-    global left_mid_is_clicked
-    left_mid_is_clicked = value
-
-
-def set_left_up_is_clicked(value):
-    global left_up_is_clicked
-    left_up_is_clicked = value
-
-
-def set_down_mid_is_clicked(value):
-    global down_mid_is_clicked
-    down_mid_is_clicked = value
-
-
-def set_up_mid_is_clicked(value):
-    global up_mid_is_clicked
-    up_mid_is_clicked = value
-
-
-def set_right_down_is_clicked(value):
-    global right_down_is_clicked
-    right_down_is_clicked = value
-
-
-def set_right_mid_is_clicked(value):
-    global right_mid_is_clicked
-    right_mid_is_clicked = value
-
-
-def set_right_up_is_clicked(value):
-    global right_up_is_clicked
-    right_up_is_clicked = value
-
-
-def set_mid_is_clicked(value):
-    global mid_is_clicked
-    mid_is_clicked = value
-
-def setControlROIPoint(dict):
-    global control_roi_point
-    control_roi_point = dict
-
-def getControlROIPoint():
-    global control_roi_point
-    return control_roi_point
-
-def clearControllerROIPoint():
-    global control_roi_point
-    control_roi_point.clear()
-    control_roi_point = {}
-
-def setMultipleUndoStack(bounding_box):
-    global multiple_undo_stack
-    multiple_undo_stack.append(bounding_box)
-
-def getMultipleUndoStack():
-    global multiple_undo_stack
-    return multiple_undo_stack
-
-def clearMultipleUndoStack():
-    global multiple_undo_stack
-    multiple_undo_stack.clear()
-    multiple_undo_stack = []
-
-def setMultipleRedoStack(bounding_box):
-    global multiple_redo_stack
-    multiple_redo_stack.append(bounding_box)
-
-def getMultipleRedoStack():
-    global multiple_redo_stack
-    return multiple_redo_stack
-
-def clearMultipleRedoStack():
-    global multiple_redo_stack
-    multiple_redo_stack.clear()
-    multiple_redo_stack = []
-
-def setMultipleBoundingBoxDict(dict):
-    global multiple_boundingBox_dict
-    multiple_boundingBox_dict = dict
-
-def getMultipleBoundingBoxDict():
-    global multiple_boundingBox_dict
-    return multiple_boundingBox_dict
-
-def clearMultipleBoundingBoxDict():
-    global multiple_boundingBox_dict
-    multiple_boundingBox_dict.clear()
-    multiple_boundingBox_dict = {}
-
-def setSingleBoundingBoxDict(dict):
-    global single_boudingBox_dict
-    single_boudingBox_dict = dict
-
-def getSingleBoundingBoxDict():
-    global single_boudingBox_dict
-    return single_boudingBox_dict
-
-def clearSingleBoundingBoxDict():
-    global single_boudingBox_dict
-    single_boudingBox_dict.clear()
-    single_boudingBox_dict = {}
-
-def setSingleUndoStack(bounding_box):
-    global single_undo_stack
-    single_undo_stack.append(bounding_box)
-
-def getSingleUndoStack():
-    global single_undo_stack
-    return single_undo_stack
-
-def clearSingleUndoStack():
-    global single_undo_stack
-    single_undo_stack.clear()
-    single_undo_stack = []
-
-def setSingleRedoStack(bounding_box):
-    global single_redo_stack
-    single_redo_stack.append(bounding_box)
-
-def getSingleRedoStack():
-    global single_redo_stack
-    return single_redo_stack
-
-def clearSingleRedoStack():
-    global single_redo_stack
-    single_redo_stack.clear()
-    single_redo_stack = []
-
-def setPointsDict(dict):
-    global points_dict
-    points_dict = dict
-
-def getPointsDict():
-    global points_dict
-    return points_dict
-
-def clearPointsDict():
-    global points_dict
-    points_dict.clear()
-    points_dict = {}
-
-def setPointsActor(actor):
-    global points_actor
-    points_actor.append(actor)
-
-def getPointsActor():
-    global points_actor
-    return points_actor
-
-def clearPointsActor():
-    global points_actor
-    points_actor.clear()
-    points_actor = []
-
-def setPointsUndoStack(point):
-    global points_undo_stack
-    points_undo_stack.append(point)
-
-def getPointsUndoStack():
-    global points_undo_stack
-    return points_undo_stack
-
-def clearPointsUndoStack():
-    global points_undo_stack
-    points_undo_stack.clear()
-    points_undo_stack = []
-
-def setPointsRedoStack(point):
-    global points_redo_stack
-    points_redo_stack.append(point)
-
-def getPointsRedoStack():
-    global points_redo_stack
-    return points_redo_stack
-
-def clearPointsRedoStack():
-    global points_redo_stack
-    points_redo_stack.clear()
-    points_redo_stack = []
-
-def setLastBoundingBoxActor(actor):
-    global last_bounding_box_actor
-    last_bounding_box_actor = actor
-
-def getLastBoundingBoxActor():
-    global last_bounding_box_actor
-    return last_bounding_box_actor
-
-def setSingleBoundingBoxActor(actor):
-    global single_bounding_box_actor
-    single_bounding_box_actor = actor
-
-def getSingleBoundingBoxActor():
-    global single_bounding_box_actor
-    return single_bounding_box_actor
-
-def setMultipleBoundingBoxActor(actor):
-    global multiple_bounding_box_actor
-    multiple_bounding_box_actor.append(actor)
-
-def getMultipleBoundingBoxActor():
-    global multiple_bounding_box_actor
-    return multiple_bounding_box_actor
-
-def clearMultipleBoundingBoxActor():
-    global multiple_bounding_box_actor
-    multiple_bounding_box_actor.clear()
-    multiple_bounding_box_actor = []
-
-def setBoundingBoxOriginal(point):
-    global box_points_original
-    box_points_original = point
-
-def getBoundingBoxOriginal():
-    global box_points_original
-    return box_points_original
-
-def setSingleBoundingBox(point):
-    global single_bounding_box
-    single_bounding_box = point
-
-def getSingleBoundingBox():
-    global single_bounding_box
-    return single_bounding_box
-
-def setLeftButtonDown(state):
-    global left_button_down
-    left_button_down = state
-
-def getLeftButtonDown():
-    global left_button_down
-    return left_button_down
-
-def setSelectSingleBoxLabel(label):
-    global select_single_box_label
-    select_single_box_label = label
-
-def getSelectSingleBoxLabel():
-    global select_single_box_label
-    return select_single_box_label
-
-def setPointPosition(positon):
-    global point_position
-    point_position = positon
-
-def getPointPosition():
-    global point_position
-    return point_position
-
-def setSelectPointLabel1(label):
-    global select_point_label_1
-    select_point_label_1 = label
-
-def getSelectPointLabel1():
-    global select_point_label_1
-    return select_point_label_1
-
-def setState_PolyTrue():
-    global state_poly
-    state_poly = True
-
-
-def setState_PolyFalse():
-    global state_poly
-    state_poly = False
-
-
-def getState_Poly():
-    global state_poly
-    return state_poly
-
-
-def setStart_Poly_Point(start):
-    global start_poly_point
-    start_poly_point = start
-
-
-def getStart_Poly_Point():
-    global start_poly_point
-    return start_poly_point
-
-
-def setEnd_Poly_Point(end):
-    global end_poly_point
-    end_poly_point = end
-
-
-def getEnd_Poly_Point():
-    global end_poly_point
-    return end_poly_point
-
-def setActors_paint(actor_paint):
-    global actors_paint
-    actors_paint.append(actor_paint)
+def setActors_paint(actor_paint: Any):
+    _STATE.append("paint", "actors_paint", actor_paint)
 
 
 def getActors_paint():
-    global actors_paint
-    return actors_paint
+    return _STATE.get("paint", "actors_paint")
 
 
-def setSliceXY(number):
-    global slice_xy
-    slice_xy = number
-    print("set")
-    print(slice_xy)
+def clearActors_paint():
+    _STATE.clear_collection("paint", "actors_paint")
 
 
-def getSliceXY():
-    global slice_xy
-    print("get")
-    print(slice_xy)
-    return slice_xy
+def setLeftButtonDown(state: bool):
+    _STATE.set("paint", "left_button_down", state)
 
 
-def addSliceXY():
-    global slice_xy
-    slice_xy += 1
+def getLeftButtonDown():
+    return _STATE.get("paint", "left_button_down")
 
 
-def minSliceXY():
-    global slice_xy
-    slice_xy -= 1
+# ---------------------------------------------------------------------------
+# Click state
+# ---------------------------------------------------------------------------
+def get_left_down_is_clicked():
+    return _STATE.get("click", "left_down_is_clicked")
 
 
-def setSliceYZ(number):
-    global slice_yz
-    slice_yz = number
+def get_left_mid_is_clicked():
+    return _STATE.get("click", "left_mid_is_clicked")
 
 
-def getSliceYZ():
-    global slice_yz
-    return slice_yz
+def get_left_up_is_clicked():
+    return _STATE.get("click", "left_up_is_clicked")
 
 
-def addSliceYZ():
-    global slice_yz
-    slice_yz += 1
+def get_down_mid_is_clicked():
+    return _STATE.get("click", "down_mid_is_clicked")
 
 
-def minSliceYZ():
-    global slice_yz
-    slice_yz -= 1
+def get_up_mid_is_clicked():
+    return _STATE.get("click", "up_mid_is_clicked")
 
 
-def setSliceXZ(number):
-    global slice_xz
-    slice_xz = number
+def get_right_down_is_clicked():
+    return _STATE.get("click", "right_down_is_clicked")
 
 
-def getSliceXZ():
-    global slice_xz
-    return slice_xz
+def get_right_mid_is_clicked():
+    return _STATE.get("click", "right_mid_is_clicked")
 
 
-def addSliceXZ():
-    global slice_xz
-    slice_xz += 1
+def get_right_up_is_clicked():
+    return _STATE.get("click", "right_up_is_clicked")
 
 
-def minSliceXZ():
-    global slice_xz
-    slice_xz -= 1
+def get_mid_is_clicked():
+    return _STATE.get("click", "mid_is_clicked")
+
+
+def set_left_down_is_clicked(value: bool):
+    _STATE.set("click", "left_down_is_clicked", value)
+
+
+def set_left_mid_is_clicked(value: bool):
+    _STATE.set("click", "left_mid_is_clicked", value)
+
+
+def set_left_up_is_clicked(value: bool):
+    _STATE.set("click", "left_up_is_clicked", value)
+
+
+def set_down_mid_is_clicked(value: bool):
+    _STATE.set("click", "down_mid_is_clicked", value)
+
+
+def set_up_mid_is_clicked(value: bool):
+    _STATE.set("click", "up_mid_is_clicked", value)
+
+
+def set_right_down_is_clicked(value: bool):
+    _STATE.set("click", "right_down_is_clicked", value)
+
+
+def set_right_mid_is_clicked(value: bool):
+    _STATE.set("click", "right_mid_is_clicked", value)
+
+
+def set_right_up_is_clicked(value: bool):
+    _STATE.set("click", "right_up_is_clicked", value)
+
+
+def set_mid_is_clicked(value: bool):
+    _STATE.set("click", "mid_is_clicked", value)
+
+
+# ---------------------------------------------------------------------------
+# ROI / annotation control
+# ---------------------------------------------------------------------------
+def setControlROIPoint(data: dict):
+    _STATE.set("annotation", "control_roi_point", data)
+
+
+def getControlROIPoint():
+    return _STATE.get("annotation", "control_roi_point")
+
+
+def clearControllerROIPoint():
+    _STATE.set("annotation", "control_roi_point", {})
+
+
+def setMultipleUndoStack(bounding_box: Any):
+    _STATE.append("annotation", "multiple_undo_stack", bounding_box)
+
+
+def getMultipleUndoStack():
+    return _STATE.get("annotation", "multiple_undo_stack")
+
+
+def clearMultipleUndoStack():
+    _STATE.clear_collection("annotation", "multiple_undo_stack")
+
+
+def setMultipleRedoStack(bounding_box: Any):
+    _STATE.append("annotation", "multiple_redo_stack", bounding_box)
+
+
+def getMultipleRedoStack():
+    return _STATE.get("annotation", "multiple_redo_stack")
+
+
+def clearMultipleRedoStack():
+    _STATE.clear_collection("annotation", "multiple_redo_stack")
+
+
+def setMultipleBoundingBoxDict(data: dict):
+    _STATE.set("annotation", "multiple_boundingBox_dict", data)
+
+
+def getMultipleBoundingBoxDict():
+    return _STATE.get("annotation", "multiple_boundingBox_dict")
+
+
+def clearMultipleBoundingBoxDict():
+    _STATE.set("annotation", "multiple_boundingBox_dict", {})
+
+
+def setSingleBoundingBoxDict(data: dict):
+    _STATE.set("annotation", "single_boundingBox_dict", data)
+
+
+def getSingleBoundingBoxDict():
+    return _STATE.get("annotation", "single_boundingBox_dict")
+
+
+def clearSingleBoundingBoxDict():
+    _STATE.set("annotation", "single_boundingBox_dict", {})
+
+
+def setSingleUndoStack(bounding_box: Any):
+    _STATE.append("annotation", "single_undo_stack", bounding_box)
+
+
+def getSingleUndoStack():
+    return _STATE.get("annotation", "single_undo_stack")
+
+
+def clearSingleUndoStack():
+    _STATE.clear_collection("annotation", "single_undo_stack")
+
+
+def setSingleRedoStack(bounding_box: Any):
+    _STATE.append("annotation", "single_redo_stack", bounding_box)
+
+
+def getSingleRedoStack():
+    return _STATE.get("annotation", "single_redo_stack")
+
+
+def clearSingleRedoStack():
+    _STATE.clear_collection("annotation", "single_redo_stack")
+
+
+def setPointsDict(data: dict):
+    _STATE.set("annotation", "points_dict", data)
+
+
+def getPointsDict():
+    return _STATE.get("annotation", "points_dict")
+
+
+def clearPointsDict():
+    _STATE.set("annotation", "points_dict", {})
+
+
+def setPointsActor(actor: Any):
+    _STATE.append("annotation", "points_actor", actor)
+
+
+def getPointsActor():
+    return _STATE.get("annotation", "points_actor")
+
+
+def clearPointsActor():
+    _STATE.clear_collection("annotation", "points_actor")
+
+
+def setPointsUndoStack(point: Any):
+    _STATE.append("annotation", "points_undo_stack", point)
+
+
+def getPointsUndoStack():
+    return _STATE.get("annotation", "points_undo_stack")
+
+
+def clearPointsUndoStack():
+    _STATE.clear_collection("annotation", "points_undo_stack")
+
+
+def setPointsRedoStack(point: Any):
+    _STATE.append("annotation", "points_redo_stack", point)
+
+
+def getPointsRedoStack():
+    return _STATE.get("annotation", "points_redo_stack")
+
+
+def clearPointsRedoStack():
+    _STATE.clear_collection("annotation", "points_redo_stack")
+
+
+def setLastBoundingBoxActor(actor: Any):
+    _STATE.set("annotation", "last_bounding_box_actor", actor)
+
+
+def getLastBoundingBoxActor():
+    return _STATE.get("annotation", "last_bounding_box_actor")
+
+
+def setSingleBoundingBoxActor(actor: Any):
+    _STATE.set("annotation", "single_bounding_box_actor", actor)
+
+
+def getSingleBoundingBoxActor():
+    return _STATE.get("annotation", "single_bounding_box_actor")
+
+
+def setMultipleBoundingBoxActor(actor: Any):
+    _STATE.append("annotation", "multiple_bounding_box_actor", actor)
+
+
+def getMultipleBoundingBoxActor():
+    return _STATE.get("annotation", "multiple_bounding_box_actor")
+
+
+def clearMultipleBoundingBoxActor():
+    _STATE.clear_collection("annotation", "multiple_bounding_box_actor")
+
+
+def setBoundingBoxOriginal(point: Any):
+    _STATE.set("annotation", "box_points_original", point)
+
+
+def getBoundingBoxOriginal():
+    return _STATE.get("annotation", "box_points_original")
+
+
+def setSingleBoundingBox(point: Any):
+    _STATE.set("annotation", "single_bounding_box", point)
+
+
+def getSingleBoundingBox():
+    return _STATE.get("annotation", "single_bounding_box")
+
+
+def setSelectSingleBoxLabel(label: bool):
+    _STATE.set("annotation", "select_single_box_label", label)
+
+
+def getSelectSingleBoxLabel():
+    return _STATE.get("annotation", "select_single_box_label")
+
+
+def setPointPosition(position: Any):
+    _STATE.set("annotation", "point_position", position)
+
+
+def getPointPosition():
+    return _STATE.get("annotation", "point_position")
+
+
+def setSelectPointLabel1(label: bool):
+    _STATE.set("annotation", "select_point_label_1", label)
+
+
+def getSelectPointLabel1():
+    return _STATE.get("annotation", "select_point_label_1")
+
+
+# ---------------------------------------------------------------------------
+# Polyline / measurement helpers
+# ---------------------------------------------------------------------------
+def setState_PolyTrue():
+    _STATE.set("measurement", "state_poly", True)
+
+
+def setState_PolyFalse():
+    _STATE.set("measurement", "state_poly", False)
+
+
+def getState_Poly():
+    return _STATE.get("measurement", "state_poly")
+
+
+def setStart_Poly_Point(start):
+    _STATE.set("measurement", "start_poly_point", start)
+
+
+def getStart_Poly_Point():
+    return _STATE.get("measurement", "start_poly_point")
+
+
+def setEnd_Poly_Point(end):
+    _STATE.set("measurement", "end_poly_point", end)
+
+
+def getEnd_Poly_Point():
+    return _STATE.get("measurement", "end_poly_point")
 
 
 def setFourPoints(point):
-    global fourPoints
-    fourPoints.append(point)
+    _STATE.append("measurement", "fourPoints", point)
 
 
 def getFourPoints():
-    global fourPoints
-    return fourPoints
+    return _STATE.get("measurement", "fourPoints")
 
 
-def setLong(num1):
-    global long
-    long = num1
+def setLong(num1: int):
+    _STATE.set("measurement", "long", num1)
 
 
 def getLong():
-    global long
-    return long
+    return _STATE.get("measurement", "long")
 
 
-def setWidth(num2):
-    global width
-    width = num2
+def setWidth(num2: int):
+    _STATE.set("measurement", "width", num2)
 
 
 def getWidth():
-    global width
-    return width
+    return _STATE.get("measurement", "width")
 
 
 def setState2True():
-    global state2
-    state2 = True
+    _STATE.set("measurement", "state2", True)
 
 
 def setState2False():
-    global state2
-    state2 = False
+    _STATE.set("measurement", "state2", False)
 
 
 def getState2():
-    global state2
-    return state2
+    return _STATE.get("measurement", "state2")
+
 
 def setStartPoint(start):
-    global startPoint
-    startPoint = start
+    _STATE.set("measurement", "startPoint", start)
 
 
 def getStartPoint():
-    global startPoint
-    return startPoint
+    return _STATE.get("measurement", "startPoint")
 
 
 def setEndPoint(end):
-    global endPoint
-    endPoint = end
+    _STATE.set("measurement", "endPoint", end)
 
 
 def getEndPoint():
-    global endPoint
-    return endPoint
+    return _STATE.get("measurement", "endPoint")
 
 
+# ---------------------------------------------------------------------------
+# Slice helpers
+# ---------------------------------------------------------------------------
+def setSliceXY(number: int):
+    _STATE.set("slice", "slice_xy", number)
+    print("set")
+    print(_STATE.get("slice", "slice_xy"))
+
+
+def getSliceXY():
+    value = _STATE.get("slice", "slice_xy")
+    print("get")
+    print(value)
+    return value
+
+
+def addSliceXY():
+    _STATE.increment("slice", "slice_xy", 1)
+
+
+def minSliceXY():
+    _STATE.increment("slice", "slice_xy", -1)
+
+
+def setSliceYZ(number: int):
+    _STATE.set("slice", "slice_yz", number)
+
+
+def getSliceYZ():
+    return _STATE.get("slice", "slice_yz")
+
+
+def addSliceYZ():
+    _STATE.increment("slice", "slice_yz", 1)
+
+
+def minSliceYZ():
+    _STATE.increment("slice", "slice_yz", -1)
+
+
+def setSliceXZ(number: int):
+    _STATE.set("slice", "slice_xz", number)
+
+
+def getSliceXZ():
+    return _STATE.get("slice", "slice_xz")
+
+
+def addSliceXZ():
+    _STATE.increment("slice", "slice_xz", 1)
+
+
+def minSliceXZ():
+    _STATE.increment("slice", "slice_xz", -1)
+
+
+# ---------------------------------------------------------------------------
+# File level state
+# ---------------------------------------------------------------------------
 def autoReset():
-    global dirpath
-    dirpath = ""
+    _STATE.set("file", "dirpath", "")
 
 
 def getDirPath():
-    global dirpath
-    return dirpath
+    return _STATE.get("file", "dirpath")
 
 
-def setDirPath(s):
-    global dirpath
-    dirpath = s
+def setDirPath(path: str):
+    _STATE.set("file", "dirpath", path)
 
 
 def getNumber():
-    global count
-    return count
+    return _STATE.get("file", "count")
 
 
 def setNumber():
-    global count
-    count += 1
+    _STATE.increment("file", "count", 1)
 
 
 def setState():
-    global state
-    state = True
+    _STATE.set("file", "state", True)
 
 
 def getState():
-    global state
-    return state
+    return _STATE.get("file", "state")
+
 
 def getFileIsEmpty():
-    global file_is_empty
-    return  file_is_empty
+    return _STATE.get("file", "file_is_empty")
 
-def setFileIsEmpty(s):
-    global  file_is_empty
-    file_is_empty = s
 
+def setFileIsEmpty(value: bool):
+    _STATE.set("file", "file_is_empty", value)
+
+
+# ---------------------------------------------------------------------------
+# Implant / dental arch state
+# ---------------------------------------------------------------------------
 def getIsPutImplant():
-    global is_put_implant
-    return is_put_implant
+    return _STATE.get("implant", "is_put_implant")
 
-def setIsPutImplant(s):
-    global is_put_implant
-    is_put_implant = s
+
+def setIsPutImplant(value: bool):
+    _STATE.set("implant", "is_put_implant", value)
+
 
 def getIsAdjust():
-    global is_adjust
-    return is_adjust
+    return _STATE.get("implant", "is_adjust")
 
-def setIsAdjust(s):
-    global is_adjust
-    is_adjust = s
+
+def setIsAdjust(value: bool):
+    _STATE.set("implant", "is_adjust", value)
+
 
 def getIsGenerateImplant():
-    global is_generate_implant
-    return  is_generate_implant
+    return _STATE.get("implant", "is_generate_implant")
 
-def setIsGenerateImplant(s):
-    global is_generate_implant
-    is_generate_implant = s
+
+def setIsGenerateImplant(value: bool):
+    _STATE.set("implant", "is_generate_implant", value)
+
 
 def getAnchorPointIsComplete():
-    global anchor_point_is_complete
-    return anchor_point_is_complete
+    return _STATE.get("implant", "anchor_point_is_complete")
 
-def setAnchorPointIsComplete(s):
-    global anchor_point_is_complete
-    anchor_point_is_complete = s
+
+def setAnchorPointIsComplete(value: bool):
+    _STATE.set("implant", "anchor_point_is_complete", value)
+
 
 def getDentalArchCurvePoint():
-    global dental_arch_curve_points
-    return dental_arch_curve_points
+    return _STATE.get("implant", "dental_arch_curve_points")
 
-def setDentalArchCurvePoint(point):
-    global dental_arch_curve_points
-    dental_arch_curve_points.append(point)
 
-def setDentalArchThickness(s):
-    global dental_arch_thickness
-    dental_arch_thickness = s
+def setDentalArchCurvePoint(point: Any):
+    _STATE.append("implant", "dental_arch_curve_points", point)
+
+
+def setDentalArchThickness(value: str):
+    _STATE.set("implant", "dental_arch_thickness", value)
+
 
 def getDentalArchThickness():
-    global dental_arch_thickness
-    return dental_arch_thickness
+    return _STATE.get("implant", "dental_arch_thickness")
 
-def setDicomPoints(point):
-    global dicom_points
-    dicom_points.append(point)
+
+def setDicomPoints(point: Any):
+    _STATE.append("implant", "dicom_points", point)
+
 
 def getDicomPoint():
-    global dicom_points
-    return dicom_points
+    return _STATE.get("implant", "dicom_points")
 
-def setControlPoints(point):
-    global control_points
-    control_points.append(point)
+
+def setControlPoints(point: Any):
+    _STATE.append("implant", "control_points", point)
+
 
 def getControlPoints():
-    global control_points
-    return control_points
+    return _STATE.get("implant", "control_points")
 
-def setPaintPoint(point):
-    global paint_points
-    paint_points.append(point)
+
+def setPaintPoint(point: Any):
+    _STATE.append("implant", "paint_points", point)
+
 
 def getPaintPoint():
-    global paint_points
-    return paint_points
+    return _STATE.get("implant", "paint_points")
 
-def setSamplePoint(point):
-    global sample_points
-    sample_points.append(point)
+
+def setSamplePoint(point: Any):
+    _STATE.append("implant", "sample_points", point)
+
 
 def getSamplePoint():
-    global sample_points
-    return sample_points
+    return _STATE.get("implant", "sample_points")

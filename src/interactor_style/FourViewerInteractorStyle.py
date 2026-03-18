@@ -120,3 +120,99 @@ class MouseWheelBackWard():
                 setSliceXZ(0)
                 self.verticalslider.setValue(0)
                 self.label.setText("Slice %d/%d" % (self.view.GetSlice(), self.view.GetSliceMax()))
+
+
+class MouseWheelForwardSeg():
+    """
+    分割叠加层专用的鼠标滚轮前滚事件处理器
+    同时更新 DICOM 查看器和分割叠加层查看器
+    """
+    def __init__(self, viewer_dicom, viewer_seg, labeltext, verticalslider, id):
+        print("分割叠加层鼠标前滚初始化")
+        self.view_dicom = viewer_dicom  # DICOM 查看器
+        self.view_seg = viewer_seg  # 分割叠加层查看器
+        self.label = labeltext
+        self.verticalslider = verticalslider
+        self.id = id  # 判断是哪个窗口 (XY, YZ, XZ)
+
+    def __call__(self, caller, ev):
+        print(f"分割叠加层滑轮前滚 - {self.id}")
+        
+        # 获取当前切片和最大切片
+        current_slice = self.view_dicom.GetSlice()
+        max_slice = self.view_dicom.GetSliceMax()
+        
+        # 计算新的切片索引
+        new_slice = min(current_slice + 1, max_slice)
+        
+        # 更新全局切片变量
+        if self.id == "XY":
+            setSliceXY(new_slice)
+        elif self.id == "YZ":
+            setSliceYZ(new_slice)
+        else:
+            setSliceXZ(new_slice)
+        
+        # 更新 DICOM 查看器
+        self.view_dicom.SetSlice(new_slice)
+        self.view_dicom.UpdateDisplayExtent()
+        
+        # 同步更新分割叠加层查看器
+        if self.view_seg is not None:
+            self.view_seg.SetSlice(new_slice)
+            self.view_seg.UpdateDisplayExtent()
+        
+        # 强制刷新渲染窗口
+        self.view_dicom.GetRenderWindow().Render()
+        
+        # 更新 UI
+        self.verticalslider.setValue(new_slice)
+        self.label.setText("Slice %d/%d" % (new_slice, max_slice))
+
+
+class MouseWheelBackWardSeg():
+    """
+    分割叠加层专用的鼠标滚轮后滚事件处理器
+    同时更新 DICOM 查看器和分割叠加层查看器
+    """
+    def __init__(self, viewer_dicom, viewer_seg, labeltext, verticalslider, id):
+        print("分割叠加层鼠标后滚初始化")
+        self.view_dicom = viewer_dicom  # DICOM 查看器
+        self.view_seg = viewer_seg  # 分割叠加层查看器
+        self.label = labeltext
+        self.verticalslider = verticalslider
+        self.id = id  # 判断是哪个窗口 (XY, YZ, XZ)
+
+    def __call__(self, caller, ev):
+        print(f"分割叠加层滑轮后滚 - {self.id}")
+        
+        # 获取当前切片
+        current_slice = self.view_dicom.GetSlice()
+        max_slice = self.view_dicom.GetSliceMax()
+        
+        # 计算新的切片索引
+        new_slice = max(current_slice - 1, 0)
+        
+        # 更新全局切片变量
+        if self.id == "XY":
+            setSliceXY(new_slice)
+        elif self.id == "YZ":
+            setSliceYZ(new_slice)
+        else:
+            setSliceXZ(new_slice)
+        
+        # 更新 DICOM 查看器
+        self.view_dicom.SetSlice(new_slice)
+        self.view_dicom.UpdateDisplayExtent()
+        
+        # 同步更新分割叠加层查看器
+        if self.view_seg is not None:
+            self.view_seg.SetSlice(new_slice)
+            self.view_seg.UpdateDisplayExtent()
+        
+        # 强制刷新渲染窗口
+        self.view_dicom.GetRenderWindow().Render()
+        
+        # 更新 UI
+        self.verticalslider.setValue(new_slice)
+        self.label.setText("Slice %d/%d" % (new_slice, max_slice))
