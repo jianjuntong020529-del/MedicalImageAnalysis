@@ -93,7 +93,7 @@ class MenuBarController(MenuBarManager):
         self.action_nifti_segmentation_editor.triggered.connect(self.on_action_nifti_segmentation_editor)
         self.action_volume_render_toolbar.triggered.connect(self.on_action_volume_render_toolbar)
         self.action_view_layout.triggered.connect(self.on_action_view_layout)
-        self.action_multi_slice_view.triggered.connect(self.on_action_multi_slice_view)
+        # action_tooth_measurement 在 MainWindow 里直接连接到 toothMeasurementController.show
         self.pointAction.triggered.connect(self.on_action_point)
         self.point_label_0.triggered.connect(self.select_point_label)
         self.point_label_1.triggered.connect(self.select_point_label)
@@ -926,10 +926,25 @@ class MenuBarController(MenuBarManager):
         if ToolBarWidget.view_layout_widget is not None:
             ToolBarWidget.view_layout_widget.show_panel()
 
-    def on_action_multi_slice_view(self):
-        """切换到多切片视图（嵌入主界面 QStackedWidget）"""
-        if ToolBarWidget.multi_slice_widget is not None:
-            ToolBarWidget.multi_slice_widget.show_panel()
+    def on_action_tooth_measurement(self):
+        """打开牙齿分割测量面板"""
+        try:
+            if not hasattr(self, '_tooth_measurement_ctrl') or self._tooth_measurement_ctrl is None:
+                from src.controller.ToothMeasurementController import ToothMeasurementController
+                self._tooth_measurement_ctrl = ToothMeasurementController(parent=self.QMainWindow)
+            self._tooth_measurement_ctrl.show()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self.QMainWindow, "打开失败",
+                f"无法打开牙齿测量面板：\n{str(e)}"
+            )
+
+    # def on_action_multi_slice_view(self):
+    #     """切换到多切片视图（嵌入主界面 QStackedWidget）"""
+    #     if ToolBarWidget.multi_slice_widget is not None:
+    #         ToolBarWidget.multi_slice_widget.show_panel()
 
     def on_action_generatePanormaic(self):
         print("全景图生成功能")

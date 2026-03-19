@@ -9,3 +9,5 @@ __init__.py
 src/logs/app.log
 *.npy
 /git.md
+/口腔牙齿分割结果定量测量界面功能.md
+/*.md

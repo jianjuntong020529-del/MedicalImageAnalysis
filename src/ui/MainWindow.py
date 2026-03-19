@@ -205,6 +205,14 @@ class Ui_MainWindow(object):
         self.view_stack.addWidget(self.multiSliceViewController.widget)
         ToolBarWidget.multi_slice_widget = self.multiSliceViewController
 
+        # 牙齿测量控制器（独立浮动窗口，延迟创建）
+        from src.controller.ToothMeasurementController import ToothMeasurementController
+        self.toothMeasurementController = ToothMeasurementController()
+        # 将菜单项信号连接到控制器
+        self.menuBarController.action_tooth_measurement.triggered.connect(
+            self.toothMeasurementController.show
+        )
+
         self.system_layout.addLayout(self.tool_bar_layout, 2)
 
         self.translateUi(QMainWindow)

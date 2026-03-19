@@ -152,6 +152,9 @@ class WindowConstant:
     # 视图布局控制
     ACTION_VIEW_LAYOUT = "视图布局"
 
+    # 牙齿测量
+    ACTION_TOOTH_MEASUREMENT = "牙齿分割测量"
+
 
 
 
