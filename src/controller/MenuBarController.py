@@ -92,6 +92,8 @@ class MenuBarController(MenuBarManager):
         self.actionAdd_Load_Lungseg_model.triggered.connect(self.on_actionAdd_Load_Lungseg_model)
         self.action_nifti_segmentation_editor.triggered.connect(self.on_action_nifti_segmentation_editor)
         self.action_volume_render_toolbar.triggered.connect(self.on_action_volume_render_toolbar)
+        self.action_view_layout.triggered.connect(self.on_action_view_layout)
+        self.action_multi_slice_view.triggered.connect(self.on_action_multi_slice_view)
         self.pointAction.triggered.connect(self.on_action_point)
         self.point_label_0.triggered.connect(self.select_point_label)
         self.point_label_1.triggered.connect(self.select_point_label)
@@ -918,6 +920,16 @@ class MenuBarController(MenuBarManager):
             widget.show()
         else:
             widget.hide()
+
+    def on_action_view_layout(self):
+        """打开/关闭视图布局控制面板"""
+        if ToolBarWidget.view_layout_widget is not None:
+            ToolBarWidget.view_layout_widget.show_panel()
+
+    def on_action_multi_slice_view(self):
+        """切换到多切片视图（嵌入主界面 QStackedWidget）"""
+        if ToolBarWidget.multi_slice_widget is not None:
+            ToolBarWidget.multi_slice_widget.show_panel()
 
     def on_action_generatePanormaic(self):
         print("全景图生成功能")

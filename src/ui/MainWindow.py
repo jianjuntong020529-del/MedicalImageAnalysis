@@ -67,9 +67,11 @@ class Ui_MainWindow(object):
         self.OrthoViewerModel = OrthoViewerModel(self.AxialOrthoViewer, self.SagittalOrthoViewer,
                                                  self.CoronalOrthoViewer, self.VolumeOrthoViewer)
 
-        # 四视图布局
-        self.four_view_layout = QtWidgets.QVBoxLayout()
+        # 四视图布局容器（放入 QStackedWidget 第0页）
+        self.four_view_page = QtWidgets.QWidget()
+        self.four_view_layout = QtWidgets.QVBoxLayout(self.four_view_page)
         self.four_view_layout.setSpacing(APPVisualStyle.LAYOUT_SPACING)
+        self.four_view_layout.setContentsMargins(0, 0, 0, 0)
 
         # 横断面，矢状面窗口布局
         self.xy_yz_horizontal_layout = QtWidgets.QHBoxLayout()
@@ -120,7 +122,11 @@ class Ui_MainWindow(object):
         self.xz_volume_label_vertical_layout.addLayout(self.labelxz_labelvolume_horizontal_layout)
 
         self.four_view_layout.addLayout(self.xz_volume_label_vertical_layout)
-        self.system_layout.addLayout(self.four_view_layout, 7)
+
+        # QStackedWidget：第0页=四视图，第1页=多切片视图（稍后添加）
+        self.view_stack = QtWidgets.QStackedWidget()
+        self.view_stack.addWidget(self.four_view_page)   # index 0
+        self.system_layout.addWidget(self.view_stack, 7)
 
         QMainWindow.setCentralWidget(self.centralwidget)
 
@@ -165,6 +171,39 @@ class Ui_MainWindow(object):
         self.volumeRenderController = VolumeRenderController(self.OrthoViewerModel, self.widget)
         self.tool_bar_layout.addWidget(self.volumeRenderController.widget_volume_render)
         ToolBarWidget.volume_render_widget = self.volumeRenderController
+
+        # 视图布局控制器（浮动面板，不加入 tool_bar_layout）
+        from src.controller.ViewLayoutController import ViewLayoutController
+        # 将四个视图的 Qt 控件引用打包传入，供布局切换时控制显示/隐藏
+        _view_refs = {
+            "axial_widget":    self.AxialOrthoViewer.widget,
+            "axial_slider":    self.AxialOrthoViewer.slider,
+            "axial_label":     self.AxialOrthoViewer.slider_label,
+            "sagittal_widget": self.SagittalOrthoViewer.widget,
+            "sagittal_slider": self.SagittalOrthoViewer.slider,
+            "sagittal_label":  self.SagittalOrthoViewer.slider_label,
+            "coronal_widget":  self.CoronalOrthoViewer.widget,
+            "coronal_slider":  self.CoronalOrthoViewer.slider,
+            "coronal_label":   self.CoronalOrthoViewer.slider_label,
+            "volume_widget":   self.VolumeOrthoViewer.widget,
+            "volume_slider":   self.VolumeOrthoViewer.slider,
+            "volume_label":    self.VolumeOrthoViewer.slider_label,
+        }
+        self.viewLayoutController = ViewLayoutController(
+            self.OrthoViewerModel, _view_refs,
+            view_stack=self.view_stack,
+            parent=QMainWindow
+        )
+        ToolBarWidget.view_layout_widget = self.viewLayoutController
+
+        # 多切片视图控制器（嵌入 QStackedWidget 第1页）
+        from src.controller.MultiSliceViewController import MultiSliceViewController
+        self.multiSliceViewController = MultiSliceViewController(
+            self.baseModelClass, self.OrthoViewerModel
+        )
+        # 将多切片面板作为第1页加入 stack
+        self.view_stack.addWidget(self.multiSliceViewController.widget)
+        ToolBarWidget.multi_slice_widget = self.multiSliceViewController
 
         self.system_layout.addLayout(self.tool_bar_layout, 2)
 

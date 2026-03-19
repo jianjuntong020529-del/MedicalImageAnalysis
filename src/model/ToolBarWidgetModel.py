@@ -13,3 +13,7 @@ class ToolBarWidget:
     annotation_widget = None
     # 体绘制工具栏
     volume_render_widget = None
+    # 视图布局控制器
+    view_layout_widget = None
+    # 多切片视图控制器
+    multi_slice_widget = None

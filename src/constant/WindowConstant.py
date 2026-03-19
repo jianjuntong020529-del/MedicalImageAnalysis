@@ -149,6 +149,9 @@ class WindowConstant:
     # 体绘制工具栏
     ACTION_VOLUME_RENDER_TOOLBAR = "体绘制工具栏"
 
+    # 视图布局控制
+    ACTION_VIEW_LAYOUT = "视图布局"
+
 
 
 

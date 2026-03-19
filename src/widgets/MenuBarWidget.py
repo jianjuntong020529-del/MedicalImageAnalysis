@@ -73,6 +73,12 @@ class MenuBarManager:
         self.action_volume_render_toolbar.setObjectName("action_volume_render_toolbar")
         self.action_volume_render_toolbar.setCheckable(True)
 
+        self.action_view_layout = QtWidgets.QAction(self.QMainWindow)
+        self.action_view_layout.setObjectName("action_view_layout")
+
+        self.action_multi_slice_view = QtWidgets.QAction(self.QMainWindow)
+        self.action_multi_slice_view.setObjectName("action_multi_slice_view")
+
 
         self.action_implant_toolbar = QtWidgets.QAction(self.QMainWindow)
         self.action_implant_toolbar.setObjectName("action_implant_toolbar")
@@ -183,6 +189,7 @@ class MenuBarManager:
         self.toolMenu.addAction(self.action_parameters_toolbar)
         self.toolMenu.addAction(self.action_nifti_segmentation_editor)
         self.toolMenu.addAction(self.action_volume_render_toolbar)
+        self.toolMenu.addAction(self.action_view_layout)
 
         self.modelloadMenu.addAction(self.actionAdd_Load_Universal_model)
         self.modelloadMenu.addAction(self.actionAdd_Load_Lungseg_model)
@@ -228,4 +235,5 @@ class MenuBarManager:
         self.actionAdd_Load_Lungseg_model.setText(_translate("MainWindow", WindowConstant.LOAD_LUNGSEG_MODEL))
         self.action_nifti_segmentation_editor.setText(_translate("MainWindow", WindowConstant.ACTION_NIFTI_SEGMENTATION_EDITOR))
         self.action_volume_render_toolbar.setText(_translate("MainWindow", WindowConstant.ACTION_VOLUME_RENDER_TOOLBAR))
+        self.action_view_layout.setText(_translate("MainWindow", WindowConstant.ACTION_VIEW_LAYOUT))
 
