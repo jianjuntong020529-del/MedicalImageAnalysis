@@ -557,15 +557,21 @@ class SegmentationEditWidget(QtWidgets.QWidget):
     def on_load_original(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "加载原始影像", "",
-            "所有支持格式 (*.dcm *.nii *.nii.gz *.npy);;"
-            "DICOM (*.dcm);;NIfTI (*.nii *.nii.gz);;NumPy (*.npy)"
+            "所有支持格式 (*.dcm *.nii *.nii.gz *.npy *.mha *.mhd *.hdr);;"
+            "DICOM (*.dcm);;NIfTI (*.nii *.nii.gz);;NumPy (*.npy);;"
+            "MetaImage (*.mha *.mhd);;Analyze (*.hdr)"
         )
         if not path:
             path = QtWidgets.QFileDialog.getExistingDirectory(self, "或选择 DICOM 目录")
         if not path:
             return
         try:
-            self.editor.load_original(path)
+            from src.utils.image_loader import load_image
+            data, spacing = load_image(path)
+            self.editor.orig_data = data
+            self.editor.orig_spacing = spacing
+            self.editor.flip_x = self.editor.flip_y = self.editor.flip_z = False
+            self.editor.rotate_k = 0
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "加载失败", str(e))
             return

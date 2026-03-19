@@ -662,14 +662,30 @@ class ThreeDViewTab(QtWidgets.QWidget):
     def showEvent(self, event):
         """Tab 第一次显示时初始化 VTK interactor"""
         super().showEvent(event)
-        if not self._vtk_initialized and self._interactor is not None:
+        if not self._vtk_initialized:
             try:
-                self._interactor.Initialize()
+                # QVTKRenderWindowInteractor 本身就是 interactor widget，直接调用 Initialize
+                if hasattr(self._vtk_widget, 'Initialize'):
+                    self._vtk_widget.Initialize()
+                    self._vtk_widget.Start()
                 self._vtk_initialized = True
+                # 初始化后设置坐标轴指示器
+                if getattr(self, '_axes_marker_pending', False) and self._renderer:
+                    try:
+                        import vtk
+                        marker = vtk.vtkOrientationMarkerWidget()
+                        marker.SetOrientationMarker(self._axes_actor)
+                        marker.SetInteractor(self._vtk_widget)
+                        marker.SetEnabled(1)
+                        marker.InteractiveOff()
+                        self._axes_marker = marker
+                        self._axes_marker_pending = False
+                    except Exception:
+                        pass
                 if self._render_window:
                     self._render_window.Render()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"VTK 初始化失败: {e}")
 
     def _init_ui(self):
         lay = QtWidgets.QHBoxLayout(self)
@@ -749,19 +765,13 @@ class ThreeDViewTab(QtWidgets.QWidget):
             rw = vtk_w.GetRenderWindow()
             rw.AddRenderer(self._renderer)
             self._render_window = rw
-            self._interactor = rw.GetInteractor()
 
             style = vtk.vtkInteractorStyleTrackballCamera()
-            self._interactor.SetInteractorStyle(style)
+            vtk_w.SetInteractorStyle(style)
 
-            # 坐标轴指示器
-            axes = vtk.vtkAxesActor()
-            marker = vtk.vtkOrientationMarkerWidget()
-            marker.SetOrientationMarker(axes)
-            marker.SetInteractor(self._interactor)
-            marker.SetEnabled(1)
-            marker.InteractiveOff()
-            self._axes_marker = marker
+            # 坐标轴指示器（延迟到 showEvent 后设置，避免 Initialize 前调用）
+            self._axes_actor = vtk.vtkAxesActor()
+            self._axes_marker_pending = True  # 标记需要在 Initialize 后设置
 
             # 不在这里调用 Initialize()，等 showEvent
             return vtk_w

@@ -155,6 +155,9 @@ class WindowConstant:
     # 牙齿测量
     ACTION_TOOTH_MEASUREMENT = "牙齿分割测量"
 
+    # 多曲面重建 CPR
+    ACTION_CPR = "多曲面重建(CPR)"
+
 
 
 

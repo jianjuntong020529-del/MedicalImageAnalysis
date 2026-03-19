@@ -83,6 +83,10 @@ class MenuBarManager:
         self.action_tooth_measurement = QtWidgets.QAction(self.QMainWindow)
         self.action_tooth_measurement.setObjectName("action_tooth_measurement")
 
+        # 多曲面重建 CPR
+        self.action_cpr = QtWidgets.QAction(self.QMainWindow)
+        self.action_cpr.setObjectName("action_cpr")
+
 
         self.action_implant_toolbar = QtWidgets.QAction(self.QMainWindow)
         self.action_implant_toolbar.setObjectName("action_implant_toolbar")
@@ -195,6 +199,7 @@ class MenuBarManager:
         self.toolMenu.addAction(self.action_volume_render_toolbar)
         self.toolMenu.addAction(self.action_view_layout)
         self.toolMenu.addAction(self.action_tooth_measurement)
+        self.toolMenu.addAction(self.action_cpr)
 
         self.modelloadMenu.addAction(self.actionAdd_Load_Universal_model)
         self.modelloadMenu.addAction(self.actionAdd_Load_Lungseg_model)
@@ -242,4 +247,5 @@ class MenuBarManager:
         self.action_volume_render_toolbar.setText(_translate("MainWindow", WindowConstant.ACTION_VOLUME_RENDER_TOOLBAR))
         self.action_view_layout.setText(_translate("MainWindow", WindowConstant.ACTION_VIEW_LAYOUT))
         self.action_tooth_measurement.setText(_translate("MainWindow", WindowConstant.ACTION_TOOTH_MEASUREMENT))
+        self.action_cpr.setText(_translate("MainWindow", WindowConstant.ACTION_CPR))
 

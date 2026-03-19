@@ -50,8 +50,8 @@ class SegmentationEditor:
     # ──────────────────────────────────────────────
 
     def load_original(self, path):
-        from src.utils.nii_utils import load_image_auto
-        self.orig_data, self.orig_spacing = load_image_auto(path)
+        from src.utils.image_loader import load_image
+        self.orig_data, self.orig_spacing = load_image(path)
         self.flip_x = self.flip_y = self.flip_z = False
         self.rotate_k = 0
         print(f"原始影像: {self.orig_data.shape}, spacing={self.orig_spacing}")

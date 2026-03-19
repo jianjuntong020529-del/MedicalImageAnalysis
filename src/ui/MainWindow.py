@@ -213,6 +213,13 @@ class Ui_MainWindow(object):
             self.toothMeasurementController.show
         )
 
+        # CPR 多曲面重建控制器
+        from src.controller.CPRController import CPRController
+        self.cprController = CPRController()
+        self.menuBarController.action_cpr.triggered.connect(
+            self.cprController.show
+        )
+
         self.system_layout.addLayout(self.tool_bar_layout, 2)
 
         self.translateUi(QMainWindow)
