@@ -14,6 +14,7 @@ from medpy.io import load, save
 
 from src.utils import DICOMConversionParams, NPYToDICOMConverter
 from src.utils.logger import get_logger
+from src.utils.LoadingAnimationHelper import LoadingAnimationHelper
 
 from src.interactor_style.SegmentationInteractorStyle import LeftButtonPressEvent_Point, LeftButtonPressEvent_labelBox, MouseMoveEvent_labelBox
 from src.constant.ParamConstant import ParamConstant
@@ -55,6 +56,13 @@ class MenuBarController(MenuBarManager):
         self.annotationService = AnnotationService(self.baseModelClass, self.viewModel)
 
         self.reader = baseModelClass.imageReader
+        
+        # 初始化加载动画辅助类
+        self.loading_helper = LoadingAnimationHelper(
+            parent_widget=QMainWindow.centralWidget(),
+            status_bar=QMainWindow.statusBar()
+        )
+        logger.info("加载动画辅助类初始化完成")
 
         # XY 窗口
         self.verticalSlider_XY = self.viewModel.AxialOrthoViewer.slider
@@ -128,88 +136,91 @@ class MenuBarController(MenuBarManager):
             ToolBarWidget.parameters_widget.widget_parameters.hide()
 
     def on_actionAdd_DICOM_Data(self):
+        """加载 DICOM 文件（带加载动画）"""
         print("选择DICOM文件")
-        old_path = getDirPath()
+        
         path = QtWidgets.QFileDialog.getExistingDirectory(None, "选取文件夹")
         print("Selected path:", path)
+        
         if path == "":
-            if old_path == 'F:\CBCT_Register_version_12_7\testdata\\40':
-                setFileIsEmpty(True)
-                return
-            else:
-                path = old_path
+            return
 
         # 获取目录下的所有文件名
-        files = os.listdir(path)
+        try:
+            files = os.listdir(path)
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self.QMainWindow,
+                "文件夹错误",
+                f"无法访问文件夹：\n{str(e)}"
+            )
+            return
 
         # 检查是否存在DICOM文件
         dcm_files_exist = any(file.endswith(".dcm") for file in files)
 
         if not dcm_files_exist:
-            print("该目录下没有DICOM文件数据")
+            QtWidgets.QMessageBox.warning(
+                self.QMainWindow,
+                "文件格式错误",
+                "该目录下没有DICOM文件数据"
+            )
             return
 
-        DataAndModelType.DATA_TYPE = 'DICOM'
-
+        # 清理 UI 状态（在加载前）
+        self._clear_ui_state_for_new_data()
+        
+        # 保存路径供后续使用
+        self._current_loading_path = path
+        
+        # 启动加载动画
+        logger.info(f"开始加载 DICOM 文件: {path}")
+        self.loading_helper.start_loading(
+            path=path,
+            fmt='DICOM',
+            on_success=self._on_dicom_loaded_success,
+            on_error=self._on_dicom_loaded_error
+        )
+    
+    def _on_dicom_loaded_success(self, data, meta):
+        """DICOM 加载成功回调"""
         try:
-            ToolBarWidget.parameters_widget.tableWidget.clearContents()
-            ToolBarWidget.parameters_widget.tableWidget.setRowCount(0)
-        except:
-            print("clear table fail!!!")
-
-        try:
-            ToolBarWidget.implant_widget.ToothID_Implant_QStringList.removeRows(1,
-                                                                                ToolBarWidget.implant_widget.ToothID_Implant_QStringList.rowCount() - 1)
-        except:
-            print("clear tooth implant list failed")
-
-        if ToolBarEnable.ruler_enable:
-            self.toolBarController.toolBarService.clear_ruler()
-            self.toolBarController.action_ruler.setChecked(False)
-        if ToolBarEnable.paint_enable:
-            self.toolBarController.toolBarService.clear_paint()
-            self.toolBarController.action_paint.setChecked(False)
-        if ToolBarEnable.pixel_enable:
-            self.toolBarController.toolBarService.clear_pixel()
-            self.toolBarController.action_pixel.setChecked(False)
-        if ToolBarEnable.polyline_enable:
-            self.toolBarController.toolBarService.clear_polyline()
-            self.toolBarController.action_polyline.setChecked(False)
-        if ToolBarEnable.crosshair_enable:
-            self.toolBarController.toolBarService.clear_crosshair()
-            self.toolBarController.action_crosshair.setChecked(False)
-        if ToolBarEnable.angle_enable:
-            self.toolBarController.toolBarService.clear_angle()
-            self.toolBarController.action_angle.setChecked(False)
-        if ToolBarEnable.roi_enable:
-            self.toolBarController.toolBarService.clear_get_roi()
-            self.toolBarController.action_get_roi.setChecked(False)
-        if ToolBarEnable.dragging_enable:
-            self.QMainWindow.setCursor(Qt.ArrowCursor)
-            self.toolBarController.toolBarService.clear_dragging_image()
-            self.toolBarController.action_dragging_image.setChecked(False)
-        if self.pointAction.isChecked():
-            self.toolBarController.toolBarService.disable_point_action()
-        if self.labelBoxAction.isChecked():
-            self.toolBarController.toolBarService.disable_label_box_action()
-        self.toolBarController.toolBar.update()
-
-        ToothImplantList.Tooth_Implant_File_List.clear()
-        ToothImplantList.Tooth_Implant_File_List = []
-
-        ToothImplantList.Tooth_Implant_Reg_File_List.clear()
-        ToothImplantList.Tooth_Implant_Reg_File_List = []
-
-        setDirPath(path)
-        self.reader.SetDirectoryName(path)
-        self.reader.Update()
-        # 更新 Data Information
-        self.baseModelClass.imageReader = self.reader
-        self.baseModelClass.update_data_information()
-
-        ParamConstant.ANNOTATION_SUBJECT_NAME = getDirPath().split('/')[-1]
-
-        self.menuBarService.on_actionAdd_DICOM_Data()
+            logger.info(f"DICOM 数据加载成功: {meta}")
+            
+            # 设置数据类型
+            DataAndModelType.DATA_TYPE = 'DICOM'
+            
+            # 更新路径
+            setDirPath(self._current_loading_path)
+            
+            # 更新 reader
+            self.reader.SetDirectoryName(self._current_loading_path)
+            self.reader.Update()
+            
+            # 更新数据信息
+            self.baseModelClass.imageReader = self.reader
+            self.baseModelClass.update_data_information()
+            
+            # 设置标注主题名称
+            ParamConstant.ANNOTATION_SUBJECT_NAME = self._current_loading_path.split('/')[-1]
+            
+            # 调用原有的服务层方法更新 UI
+            self.menuBarService.on_actionAdd_DICOM_Data()
+            
+            logger.info("DICOM 数据处理完成")
+            
+        except Exception as e:
+            logger.error(f"处理 DICOM 数据时出错: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(
+                self.QMainWindow,
+                "数据处理错误",
+                f"加载成功但处理数据时出错：\n{str(e)}"
+            )
+    
+    def _on_dicom_loaded_error(self, error_msg):
+        """DICOM 加载失败回调"""
+        logger.error(f"DICOM 加载失败: {error_msg}")
+        # 错误对话框已由 LoadingAnimationHelper 显示
 
     def on_actionAdd_IM0BIM_Data(self):
         print("选择IM0BIM文件")
@@ -322,23 +333,10 @@ class MenuBarController(MenuBarManager):
         self.menuBarService.on_actionAdd_IM0_Data(self.SliceThickness)
 
     def on_actionAdd_NIFIT_Data(self):
-        """
-        处理 NIFTI 文件加载操作
-        
-        验证 DICOM 数据已加载，然后打开文件选择对话框选择 NIFTI 文件，
-        并委托给 MenuBarService 进行处理
-        """
+        """加载 NIFTI 文件（带加载动画）"""
         print("选择 NIFTI 文件")
         
-        # 验证 DICOM 数据是否已加载
-        # if getDirPath() == "" or getFileIsEmpty():
-        #     self.message_warning_dialog(
-        #         'NIFTI 加载错误', 
-        #         '请先加载 DICOM 数据，然后再加载 NIFTI 分割文件。'
-        #     )
-        #     return
-        
-        # 打开文件选择对话框，添加适当的过滤器
+        # 打开文件选择对话框
         file_dialog_result = QtWidgets.QFileDialog.getOpenFileName(
             None, 
             "选择 NIFTI 分割文件", 
@@ -351,300 +349,300 @@ class MenuBarController(MenuBarManager):
         
         nifti_path = file_dialog_result[0]
         
+        # 验证文件存在性
+        if not os.path.exists(nifti_path):
+            QtWidgets.QMessageBox.warning(
+                self.QMainWindow,
+                'NIFTI 文件错误',
+                f'选择的文件不存在: {nifti_path}'
+            )
+            return
+        
+        # 启动加载动画
+        logger.info(f"开始加载 NIFTI 文件: {nifti_path}")
+        self.loading_helper.start_loading(
+            path=nifti_path,
+            fmt='NII',
+            on_success=self._on_nifti_loaded_success,
+            on_error=self._on_nifti_loaded_error
+        )
+    
+    def _on_nifti_loaded_success(self, data, meta):
+        """NIFTI 加载成功回调"""
         try:
-            # 验证文件存在性
-            if not os.path.exists(nifti_path):
-                self.message_warning_dialog(
-                    'NIFTI 文件错误',
-                    f'选择的文件不存在: {nifti_path}'
-                )
-                return
+            logger.info(f"NIFTI 数据加载成功: {meta}")
             
-            # 委托给服务层处理
-            self.menuBarService.on_actionAdd_NIFIT_Data(nifti_path)
+            # 调用原有的服务层方法
+            self.menuBarService.on_actionAdd_NIFIT_Data(meta['路径'])
             
-            # 加载NIFTI文件后，恢复缩放交互功能
+            # 恢复缩放交互功能
             self.restore_zoom_interaction()
             
+            logger.info("NIFTI 数据处理完成")
+            
         except Exception as e:
-            # 错误处理和用户反馈
-            error_message = f"加载 NIFTI 文件时发生错误: {str(e)}"
-            self.message_warning_dialog('NIFTI 加载错误', error_message)
+            logger.error(f"处理 NIFTI 数据时出错: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(
+                self.QMainWindow,
+                "数据处理错误",
+                f"加载成功但处理数据时出错：\n{str(e)}"
+            )
+    
+    def _on_nifti_loaded_error(self, error_msg):
+        """NIFTI 加载失败回调"""
+        logger.error(f"NIFTI 加载失败: {error_msg}")
 
     def on_actionAdd_NPY_Data(self):
-        """
-        处理 NPY 文件加载操作
-        
-        打开文件选择对话框选择 .npy 文件，验证文件存在性和可读性，
-        并委托给 MenuBarService 进行处理，同时处理UI状态更新和用户反馈
-        """
+        """加载 NPY 文件（带加载动画和转换）"""
         print("选择 NPY 文件")
         
-        error_recovery_manager = None
+        # 打开文件选择对话框
+        file_dialog_result = QtWidgets.QFileDialog.getOpenFileName(
+            None, 
+            "选择 NPY 数据文件", 
+            "", 
+            "NumPy Files (*.npy);;All Files (*)"
+        )
         
-        try:
-            # 初始化错误恢复管理器
-            error_recovery_manager = ErrorRecoveryManager()
-            
-            # 打开文件选择对话框，添加适当的过滤器
-            file_dialog_result = QtWidgets.QFileDialog.getOpenFileName(
-                None, 
-                "选择 NPY 数据文件", 
-                "", 
-                "NumPy Files (*.npy);;All Files (*)"
+        if file_dialog_result[0] == "":
+            return
+        
+        npy_path = file_dialog_result[0]
+        
+        # 验证文件存在性
+        if not os.path.exists(npy_path):
+            QtWidgets.QMessageBox.warning(
+                self.QMainWindow,
+                'NPY 文件错误',
+                f'选择的文件不存在: {npy_path}'
             )
-            
-            if file_dialog_result[0] == "":
-                return
-            
-            npy_path = file_dialog_result[0]
-            
-            # 验证文件存在性
-            if not os.path.exists(npy_path):
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.FILE_NOT_FOUND,
-                    f'选择的文件不存在: {npy_path}',
-                    file_path=npy_path
-                )
-                error_recovery_manager.handle_error(error_context)
-                
-                self.message_warning_dialog(
-                    'NPY 文件错误',
-                    f'选择的文件不存在: {npy_path}'
-                )
-                return
-            
-            # 验证文件可读性
-            if not os.access(npy_path, os.R_OK):
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.PERMISSION_ERROR,
-                    f'文件无法读取，请检查文件权限: {npy_path}',
-                    file_path=npy_path
-                )
-                error_recovery_manager.handle_error(error_context)
-                
-                self.message_warning_dialog(
-                    'NPY 文件错误',
-                    f'文件无法读取，请检查文件权限: {npy_path}'
-                )
-                return
-            
-            # 基本的 .npy 文件格式验证
-            if not npy_path.lower().endswith('.npy'):
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.INVALID_DATA_FORMAT,
-                    '请选择有效的 .npy 文件',
-                    file_path=npy_path
-                )
-                error_recovery_manager.handle_error(error_context)
-                
-                self.message_warning_dialog(
-                    'NPY 文件错误',
-                    '请选择有效的 .npy 文件'
-                )
-                return
-
-            #  这里实现NPY转化为DICOM的逻辑
-            # 如果是重新加载NPY文件，需要先释放VTK reader对旧文件的占用
-            if DataAndModelType.DATA_TYPE == 'NPY':
-                logger.info("Releasing VTK reader resources before reloading NPY data")
+            return
+        
+        # 验证文件可读性
+        if not os.access(npy_path, os.R_OK):
+            QtWidgets.QMessageBox.warning(
+                self.QMainWindow,
+                'NPY 文件错误',
+                f'文件无法读取，请检查文件权限: {npy_path}'
+            )
+            return
+        
+        # 清理 UI 状态
+        self._clear_ui_state_for_new_data()
+        
+        # 准备临时目录
+        self.save_npypath_temp = ParamConstant.OUTPUT_FILE_PATH + 'npy_temp/'
+        if not os.path.exists(self.save_npypath_temp):
+            os.mkdir(self.save_npypath_temp)
+        else:
+            for file in glob.glob(self.save_npypath_temp + "*.dcm"):
                 try:
-                    # 释放reader对文件的占用
-                    self.reader.SetDirectoryName("")
-                    self.reader.Modified()
-                    self.reader.Update()
-                    # 清理viewer中的引用
-                    if hasattr(self, 'menuBarService'):
-                        for viewer_attr in ['viewer_XY', 'viewer_YZ', 'viewer_XZ']:
-                            if hasattr(self.menuBarService, viewer_attr):
-                                viewer = getattr(self.menuBarService, viewer_attr)
-                                if viewer and hasattr(viewer, 'GetRenderWindow'):
-                                    viewer.GetRenderWindow().Finalize()
-                    # 给系统一点时间释放文件句柄
-                    import time
-                    time.sleep(0.2)
-                except Exception as e:
-                    logger.warning(f"Failed to release reader resources: {e}")
+                    os.remove(file)
+                except:
+                    pass
+        
+        self.save_npypath = ParamConstant.OUTPUT_FILE_PATH + 'npy/'
+        if not os.path.exists(self.save_npypath):
+            os.mkdir(self.save_npypath)
+        else:
+            for file in glob.glob(self.save_npypath + "*.dcm"):
+                try:
+                    os.remove(file)
+                except:
+                    pass
+        
+        # 启动自定义的 NPY 加载流程（包含转换）
+        logger.info(f"开始加载 NPY 文件: {npy_path}")
+        self._load_npy_with_conversion(npy_path)
+    
+    def _load_npy_with_conversion(self, npy_path):
+        """
+        加载 NPY 并转换为 DICOM（带动画）
+        由于 NPY 需要转换步骤，这里使用自定义流程
+        """
+        from src.widgets.LoadingAnimationWidget import LoadingOverlay
+        from PyQt5.QtCore import QThread, pyqtSignal
+        
+        # 创建自定义工作线程（包含转换步骤）
+        class NPYConversionWorker(QThread):
+            progress = pyqtSignal(int, str)
+            finished = pyqtSignal(dict)
+            error = pyqtSignal(str)
             
-            self.save_npypath_temp = ParamConstant.OUTPUT_FILE_PATH + 'npy_temp/'
-            if not os.path.exists(self.save_npypath_temp):
-                os.mkdir(self.save_npypath_temp)
-            else:
-                for file in glob.glob(self.save_npypath_temp + "*.dcm"):
-                    os.remove(file)
-            self.save_npypath = ParamConstant.OUTPUT_FILE_PATH + 'npy/'
-            if not os.path.exists(self.save_npypath):
-                os.mkdir(self.save_npypath)
-            else:
-                for file in glob.glob(self.save_npypath_temp + "*.dcm"):
-                    os.remove(file)
-
-            # 加载NPY文件
-            try:
-                npy_data = np.load(npy_path)
-                logger.info(f"Successfully loaded NPY file: shape={npy_data.shape}, dtype={npy_data.dtype}")
-            except Exception as e:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.INVALID_DATA_FORMAT,
-                    f"Failed to load NPY file: {npy_path}",
-                    file_path=npy_path,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-                raise ValueError(f"Failed to load NPY file: {npy_path}") from e
-
-            # 验证数据格式为三维数组
-            if len(npy_data.shape) != 3:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.INVALID_DATA_FORMAT,
-                    f"Invalid data format. Expected 3D array, got {len(npy_data.shape)}D array with shape: {npy_data.shape}",
-                    file_path=npy_path
-                )
-                error_recovery_manager.handle_error(error_context)
-                raise ValueError(
-                    f"Invalid data format. Expected 3D array, got {len(npy_data.shape)}D array with shape: {npy_data.shape}")
-
-            if npy_data.size == 0:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.INVALID_DATA_FORMAT,
-                    "NPY file contains no data",
-                    file_path=npy_path
-                )
-                error_recovery_manager.handle_error(error_context)
-                raise ValueError("NPY file contains no data")
-
-            # 创建NPY到DICOM转换器
-            conversion_params = DICOMConversionParams(
-                pixel_spacing=(1.0, 1.0),
-                slice_thickness=1.0,
-                patient_name="NPY_PATIENT",
-                study_description="NPY Data Import",
-                data_type= "NPY"
-            )
-            converter = NPYToDICOMConverter(conversion_params)
-
-            # 转换NPY数据为DICOM格式
-            try:
-                dicom_files = converter.convert(npy_data, self.save_npypath_temp)
-                logger.info(f"Successfully converted NPY to {len(dicom_files)} DICOM files")
-            except MemoryError as e:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.MEMORY_ERROR,
-                    f"Insufficient memory to convert NPY data",
-                    file_path=npy_path,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-                raise RuntimeError(f"Insufficient memory to convert NPY data") from e
-            except Exception as e:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.CONVERSION_ERROR,
-                    f"Failed to convert NPY to DICOM format",
-                    file_path=npy_path,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-                raise RuntimeError(f"Failed to convert NPY to DICOM format") from e
-
-
-            dicom_files = glob.glob(self.save_npypath_temp + "*.dcm")
-            dicom_files.sort()
-            number_slices = len(dicom_files)
-            for index in range(number_slices):
-                dicom_file = pydicom.dcmread(dicom_files[index])
-                convertNsave(dicom_file,ParamConstant.IMAGE_DCM, self.save_npypath, index)
-                self.SliceThickness = dicom_file.SliceThickness
-
-            # 在开始处理前清理UI状态和工具栏
-            self._clear_ui_state_for_new_data()
-
+            def __init__(self, npy_path, temp_path, final_path):
+                super().__init__()
+                self.npy_path = npy_path
+                self.temp_path = temp_path
+                self.final_path = final_path
+                self._cancelled = False
+            
+            def cancel(self):
+                self._cancelled = True
+            
+            def run(self):
+                try:
+                    # 步骤 1: 加载 NPY
+                    self.progress.emit(10, 'np.load() 执行中...')
+                    npy_data = np.load(self.npy_path, allow_pickle=False)
+                    logger.info(f"NPY 文件加载成功: shape={npy_data.shape}, dtype={npy_data.dtype}")
+                    
+                    if self._cancelled:
+                        return
+                    
+                    # 步骤 2: 验证数据
+                    self.progress.emit(30, '验证数据格式...')
+                    if len(npy_data.shape) != 3:
+                        raise ValueError(f"数据格式错误，期望 3D 数组，实际为 {len(npy_data.shape)}D")
+                    
+                    if npy_data.size == 0:
+                        raise ValueError("NPY 文件不包含数据")
+                    
+                    if self._cancelled:
+                        return
+                    
+                    # 步骤 3: 转换为 DICOM
+                    self.progress.emit(50, '转换为 DICOM 格式...')
+                    
+                    conversion_params = DICOMConversionParams(
+                        pixel_spacing=(1.0, 1.0),
+                        slice_thickness=1.0,
+                        patient_name="NPY_PATIENT",
+                        study_description="NPY Data Import",
+                        data_type="NPY"
+                    )
+                    converter = NPYToDICOMConverter(conversion_params)
+                    dicom_files = converter.convert(npy_data, self.temp_path)
+                    logger.info(f"成功转换为 {len(dicom_files)} 个 DICOM 文件")
+                    
+                    if self._cancelled:
+                        return
+                    
+                    # 步骤 4: 处理 DICOM 文件
+                    self.progress.emit(75, '处理 DICOM 文件...')
+                    dicom_files = glob.glob(self.temp_path + "*.dcm")
+                    dicom_files.sort()
+                    
+                    slice_thickness = 1.0
+                    for index, dicom_file_path in enumerate(dicom_files):
+                        dicom_file = pydicom.dcmread(dicom_file_path)
+                        convertNsave(dicom_file, ParamConstant.IMAGE_DCM, self.final_path, index)
+                        slice_thickness = dicom_file.SliceThickness
+                    
+                    if self._cancelled:
+                        return
+                    
+                    # 完成
+                    self.progress.emit(100, '完成')
+                    
+                    meta = {
+                        '格式': 'NPY',
+                        '维度': str(npy_data.shape),
+                        '数据类型': str(npy_data.dtype),
+                        '路径': self.npy_path,
+                        'slice_thickness': slice_thickness,
+                        'dicom_path': self.final_path
+                    }
+                    
+                    self.finished.emit(meta)
+                    
+                except Exception as e:
+                    logger.error(f"NPY 转换失败: {e}", exc_info=True)
+                    self.error.emit(str(e))
+        
+        # 创建遮罩
+        filename = os.path.basename(npy_path)
+        self._overlay = LoadingOverlay(self.QMainWindow.centralWidget(), 'NPY', filename)
+        self._overlay.set_steps([])  # NPY 不显示步骤列表
+        self._overlay.show_over(self.QMainWindow.centralWidget())
+        self._overlay.cancelled.connect(self._on_npy_cancel)
+        
+        # 创建并启动工作线程
+        self._npy_worker = NPYConversionWorker(
+            npy_path,
+            self.save_npypath_temp,
+            self.save_npypath
+        )
+        self._npy_worker.progress.connect(self._overlay.update_progress)
+        self._npy_worker.finished.connect(self._on_npy_loaded_success)
+        self._npy_worker.error.connect(self._on_npy_loaded_error)
+        self._npy_worker.start()
+    
+    def _on_npy_loaded_success(self, meta):
+        """NPY 加载成功回调"""
+        try:
+            # 使用淡出动画隐藏遮罩
+            if self._overlay:
+                self._overlay.fade_out_and_close()
+                self._overlay = None
+            
+            logger.info(f"NPY 数据加载成功: {meta}")
+            
+            # 设置数据类型
             DataAndModelType.DATA_TYPE = 'NPY'
-
-            setDirPath(self.save_npypath)
-
-            self.reader.SetDirectoryName(self.save_npypath)
+            
+            # 更新路径
+            setDirPath(meta['dicom_path'])
+            
+            # 更新 reader
+            self.reader.SetDirectoryName(meta['dicom_path'])
             self.reader.Update()
-            # 更新 Data Information
             self.baseModelClass.imageReader = self.reader
             self.baseModelClass.update_data_information()
-
-            self.menuBarService.on_actionAdd_NPY_Data(self.SliceThickness)
-
             
-        except FileNotFoundError as e:
-            error_message = f"文件未找到: {str(e)}"
-            if error_recovery_manager:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.FILE_NOT_FOUND,
-                    error_message,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-            self.message_warning_dialog('NPY 加载错误', error_message)
+            # 调用服务层方法
+            self.menuBarService.on_actionAdd_NPY_Data(meta['slice_thickness'])
             
-        except PermissionError as e:
-            error_message = f"文件权限错误: {str(e)}"
-            if error_recovery_manager:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.PERMISSION_ERROR,
-                    error_message,
-                    exception=e
+            # 显示成功消息
+            if self.QMainWindow.statusBar():
+                self.QMainWindow.statusBar().showMessage(
+                    f'✓  {os.path.basename(meta["路径"])} 加载完成   {meta["维度"]}',
+                    4000
                 )
-                error_recovery_manager.handle_error(error_context)
-            self.message_warning_dialog('NPY 加载错误', error_message)
             
-        except ValueError as e:
-            error_message = f"数据格式错误: {str(e)}"
-            if error_recovery_manager:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.INVALID_DATA_FORMAT,
-                    error_message,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-            self.message_warning_dialog('NPY 加载错误', error_message)
-            
-        except MemoryError as e:
-            error_message = f"内存不足，建议关闭其他应用程序或使用较小的数据文件: {str(e)}"
-            if error_recovery_manager:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.MEMORY_ERROR,
-                    error_message,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-            self.message_warning_dialog('NPY 加载错误', error_message)
-            
-        except RuntimeError as e:
-            error_message = f"运行时错误: {str(e)}"
-            if error_recovery_manager:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.VTK_ERROR,
-                    error_message,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-            self.message_warning_dialog('NPY 加载错误', error_message)
+            logger.info("NPY 数据处理完成")
             
         except Exception as e:
-            # 错误处理和用户反馈
-            error_message = f"加载 NPY 文件时发生未知错误: {str(e)}"
-            if error_recovery_manager:
-                error_context = error_recovery_manager.create_error_context(
-                    ErrorType.UNKNOWN_ERROR,
-                    error_message,
-                    exception=e
-                )
-                error_recovery_manager.handle_error(error_context)
-            self.message_warning_dialog('NPY 加载错误', error_message)
+            logger.error(f"处理 NPY 数据时出错: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(
+                self.QMainWindow,
+                "数据处理错误",
+                f"加载成功但处理数据时出错：\n{str(e)}"
+            )
+    
+    def _on_npy_loaded_error(self, error_msg):
+        """NPY 加载失败回调"""
+        # 使用淡出动画隐藏遮罩
+        if self._overlay:
+            self._overlay.fade_out_and_close()
+            self._overlay = None
         
-        finally:
-            # 确保资源清理
-            if error_recovery_manager:
-                try:
-                    error_recovery_manager.cleanup_resources()
-                except Exception as cleanup_error:
-                    print(f"清理资源时发生错误: {cleanup_error}")
+        logger.error(f"NPY 加载失败: {error_msg}")
+        
+        QtWidgets.QMessageBox.critical(
+            self.QMainWindow,
+            '加载失败',
+            f'NPY 文件读取出错：\n{error_msg}'
+        )
+    
+    def _on_npy_cancel(self):
+        """取消 NPY 加载"""
+        if hasattr(self, '_npy_worker') and self._npy_worker:
+            self._npy_worker.cancel()
+            self._npy_worker.quit()
+            self._npy_worker.wait()
+        
+        # 使用淡出动画隐藏遮罩
+        if self._overlay:
+            self._overlay.fade_out_and_close()
+            self._overlay = None
+        
+        logger.info("用户取消了 NPY 文件加载")
+        
+        QtWidgets.QMessageBox.information(
+            self.QMainWindow,
+            '已取消',
+            'NPY 文件加载已取消。'
+        )
 
     def _clear_ui_state_for_new_data(self):
         """
