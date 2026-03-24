@@ -21,6 +21,8 @@ from src.model.ToolBarWidgetModel import ToolBarWidget
 from src.style.AppVisualStyle import APPVisualStyle
 from src.widgets.QtOrthoViewerWidget import QtOrthoViewer
 from src.model.OrthoViewerModel import OrthoViewerModel
+from src.model.DataManagerModel import get_data_manager
+from src.widgets.DataManagerWidget import DataManagerPanel
 
 # 关闭error弹窗
 error = vtk.vtkOutputWindow
@@ -40,7 +42,7 @@ class Ui_MainWindow(object):
         QMainWindow.setStyleSheet(APPVisualStyle.BACKGROUND_COLOR)
 
         # 窗口大小
-        QMainWindow.resize(1286, 1073)
+        QMainWindow.resize(1600, 1073)
 
         # 软件图标
         QMainWindow.setWindowIcon(QtGui.QIcon(QIconConstant.WINDOW_ICON))
@@ -51,6 +53,13 @@ class Ui_MainWindow(object):
         # 系统整体布局
         self.system_layout = QtWidgets.QHBoxLayout(self.centralwidget)
         self.system_layout.setSpacing(APPVisualStyle.LAYOUT_SPACING)
+
+        # 数据管理面板（左侧）
+        self.data_manager_model = get_data_manager()
+        self.data_manager_panel = DataManagerPanel(self.data_manager_model)
+
+        self.system_layout.addWidget(self.data_manager_panel)
+
         self.system_layout.addWidget(self.widget)
 
         # Data
@@ -140,6 +149,26 @@ class Ui_MainWindow(object):
 
         # 菜单栏
         self.menuBarController = MenuBarController(self.baseModelClass, self.OrthoViewerModel, self.toolBarController, QMainWindow)
+
+        # 数据管理面板「加载数据」按钮 → 统一加载对话框
+        self.data_manager_panel.add_data_requested.connect(
+            self.menuBarController.on_action_add_data
+        )
+
+        # 点击行 → 激活叠加/显示
+        self.data_manager_panel.item_activated.connect(
+            self.menuBarController.on_item_activated
+        )
+
+        # 复选框 → 控制分割层显示/隐藏
+        self.data_manager_panel.visibility_changed.connect(
+            self.menuBarController.on_item_visibility_changed
+        )
+
+        # 颜色选择器 → 更新 VTK actor 颜色
+        self.data_manager_panel.color_changed.connect(
+            self.menuBarController.on_item_color_changed
+        )
 
         # 对比度调整栏
         self.contrast = ContrastController(self.baseModelClass, self.OrthoViewerModel, self.widget)

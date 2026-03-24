@@ -39,6 +39,7 @@ from src.ui.CoronalCanalAnnotationWindow import CoronalCanalAnnotationWindow
 from src.utils.IM0AndBIMUtils import Save_BIM, convertNsave
 from src.utils.globalVariables import *
 from src.widgets.MenuBarWidget import MenuBarManager
+from src.model.DataManagerModel import get_data_manager, DataItem, TYPE_RAW, TYPE_SEG, TYPE_3D
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ class MenuBarController(MenuBarManager):
         
         # 初始化加载动画辅助类
         self.loading_helper = LoadingAnimationHelper(
-            parent_widget=QMainWindow.centralWidget(),
+            parent_widget=QMainWindow,
             status_bar=QMainWindow.statusBar()
         )
         logger.info("加载动画辅助类初始化完成")
@@ -89,6 +90,7 @@ class MenuBarController(MenuBarManager):
         self.actionAdd_STL_Data.triggered.connect(self.on_actionAdd_STL_Data)
         self.actionAdd_NIFIT_Data.triggered.connect(self.on_actionAdd_NIFIT_Data)
         self.actionAdd_NPY_Data.triggered.connect(self.on_actionAdd_NPY_Data)
+        self.action_add_data.triggered.connect(self.on_action_add_data)
 
         self.action_generatePanormaic.triggered.connect(self.on_action_generatePanormaic)
         self.action_toothLandmark_annotation.triggered.connect(self.on_action_tooth_landmark_annotation)
@@ -708,6 +710,103 @@ class MenuBarController(MenuBarManager):
             
         except Exception as e:
             print(f"清理UI状态时发生错误: {e}")
+
+    def on_seg_visibility_changed(self, name: str, data_type: str, visible: bool):
+        """
+        数据管理器可见性切换回调
+        - 分割图像(TYPE_SEG)：visible=True 时叠加显示，False 时移除叠加
+        - 三维数据(TYPE_3D)：visible=True 时显示 actor，False 时隐藏
+        """
+        from src.model.DataManagerModel import TYPE_SEG, TYPE_3D, get_data_manager
+        from src.model.VolumeRenderModel import VolumeRender
+
+        data_manager = get_data_manager()
+        item = data_manager.get_item(name)
+        if item is None:
+            return
+
+        if data_type == TYPE_SEG:
+            if visible:
+                # 叠加显示：调用 menuBarService 加载 NII 叠加
+                try:
+                    self.menuBarService.on_actionAdd_NIFIT_Data(item.path, color=self._item_color_rgb(name))
+                    self._active_seg_name = name
+                    self._active_seg_path = item.path
+                    logger.info(f"叠加显示分割图像: {name}")
+                except Exception as e:
+                    logger.error(f"叠加显示失败: {e}", exc_info=True)
+            else:
+                # 隐藏叠加：重建纯 DICOM 视图
+                try:
+                    self.menuBarService.on_actionAdd_DICOM_Data()
+                    logger.info(f"隐藏分割叠加: {name}")
+                except Exception as e:
+                    logger.error(f"隐藏叠加失败: {e}", exc_info=True)
+
+        elif data_type == TYPE_3D:
+            # 控制 STL actor 显示/隐藏
+            renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+            if renderer and hasattr(VolumeRender, 'actor_stl_list'):
+                for actor in VolumeRender.actor_stl_list:
+                    actor.SetVisibility(1 if visible else 0)
+                self.viewModel.VolumeOrthorViewer.widget.Render()
+
+    def on_data_item_deleted(self, name: str, data_type: str):
+        """
+        数据管理器删除回调
+        - 分割图像：移除叠加，恢复纯 DICOM 视图
+        - 三维数据：从体绘制窗口移除对应 actor；若全部删除则恢复体绘制
+        - 原始图像：清空四视图
+        """
+        from src.model.DataManagerModel import TYPE_SEG, TYPE_3D, TYPE_RAW, get_data_manager
+        from src.model.VolumeRenderModel import VolumeRender
+
+        data_manager = get_data_manager()
+
+        if data_type == TYPE_SEG:
+            # 恢复纯 DICOM 视图（如果还有原始图像）
+            if data_manager.raw_items():
+                try:
+                    self.menuBarService.on_actionAdd_DICOM_Data()
+                except Exception as e:
+                    logger.error(f"删除分割后恢复视图失败: {e}", exc_info=True)
+
+        elif data_type == TYPE_3D:
+            renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+            if renderer and hasattr(VolumeRender, 'actor_stl_list'):
+                # 清空所有 STL actor，重新只加载剩余的
+                for actor in VolumeRender.actor_stl_list:
+                    try:
+                        renderer.RemoveActor(actor)
+                    except:
+                        pass
+                VolumeRender.actor_stl_list.clear()
+
+                # 重新加载剩余 3D 数据
+                remaining_3d = data_manager.items_3d()
+                if remaining_3d:
+                    yellow = (223/255.0, 196/255.0, 45/255.0)
+                    for it in remaining_3d:
+                        try:
+                            actor = self.LoadSTL(it.path, color=yellow)
+                            renderer.AddActor(actor)
+                            VolumeRender.actor_stl_list.append(actor)
+                        except Exception as e:
+                            logger.error(f"重新加载 STL {it.name} 失败: {e}")
+                else:
+                    # 没有 3D 数据了，恢复体绘制（如果有原始图像）
+                    if hasattr(VolumeRender, 'volume_cbct') and VolumeRender.volume_cbct:
+                        try:
+                            renderer.AddVolume(VolumeRender.volume_cbct)
+                        except:
+                            pass
+
+                renderer.ResetCamera()
+                self.viewModel.VolumeOrthorViewer.widget.Render()
+
+        elif data_type == TYPE_RAW:
+            # 原始图像删除：清空四视图（简单重置）
+            logger.info(f"原始图像 {name} 已删除，四视图将保持当前状态")
 
     def _handle_npy_loading_success(self, npy_path: str):
         """
@@ -1471,3 +1570,312 @@ class MenuBarController(MenuBarManager):
             print(f"恢复缩放交互功能时发生错误: {e}")
             # 即使出错也不应该阻止程序继续运行
 
+
+    def _item_color_rgb(self, name: str):
+        """从 DataItem 的 hex 颜色转为 VTK 用的 (r, g, b) 元组，范围 0-1"""
+        from PyQt5.QtGui import QColor
+        item = get_data_manager().get_item(name)
+        if item and item.color:
+            c = QColor(item.color)
+            return (c.redF(), c.greenF(), c.blueF())
+        return (1.0, 0.0, 0.0)  # 默认红色
+
+    def on_item_activated(self, name: str, data_type: str, path: str):
+        """
+        数据管理器点击行时触发：
+        - 分割图像(TYPE_SEG)：叠加到当前原始图像，若无原始图像则单独显示
+        - 原始图像(TYPE_RAW)：切换主视图到该数据
+        - 三维数据(TYPE_3D)：无需处理（已在加载时渲染）
+        """
+        from src.model.DataManagerModel import TYPE_SEG, TYPE_RAW, TYPE_3D, get_data_manager
+        if not path or not os.path.exists(path):
+            logger.warning(f"激活数据路径不存在: {path}")
+            return
+
+        if data_type == TYPE_SEG:
+            logger.info(f"激活分割图像: {name} → {path}")
+            try:
+                self.menuBarService.on_actionAdd_NIFIT_Data(path, color=self._item_color_rgb(name))
+                self.restore_zoom_interaction()
+                get_data_manager().set_visible(name, True)
+                self._active_seg_name = name
+                self._active_seg_path = path
+            except Exception as e:
+                logger.error(f"叠加分割图像失败: {e}", exc_info=True)
+                QtWidgets.QMessageBox.warning(
+                    self.QMainWindow, '叠加失败', f'叠加分割图像失败：\n{str(e)}'
+                )
+
+        elif data_type == TYPE_RAW:
+            # 原始图像点击：如果是NII且当前没有加载过，则显示
+            logger.info(f"激活原始图像: {name} → {path}")
+            try:
+                self.menuBarService.on_actionAdd_NIFIT_Data(path)
+                self.restore_zoom_interaction()
+                get_data_manager().set_visible(name, True)
+            except Exception as e:
+                logger.error(f"显示原始图像失败: {e}", exc_info=True)
+
+    def on_item_visibility_changed(self, name: str, data_type: str, visible: bool):
+        """
+        复选框切换：
+        - 勾选：若分割层未激活则先叠加，已激活则直接显示
+        - 取消：隐藏叠加层
+        """
+        from src.model.DataManagerModel import TYPE_SEG, get_data_manager
+        if data_type != TYPE_SEG:
+            return
+
+        item = get_data_manager().get_item(name)
+        if not item or not item.path:
+            return
+
+        if visible:
+            # 检查分割层是否已经激活（viewer_seg_xy 存在）
+            seg_xy = getattr(self.menuBarService, 'viewer_seg_xy', None)
+            # 用 _active_seg_path 记录当前激活的分割路径
+            active_path = getattr(self, '_active_seg_path', None)
+
+            if seg_xy is None or active_path != item.path:
+                # 未激活或切换了不同分割文件 → 重新叠加
+                logger.info(f"勾选激活分割叠加: {name} → {item.path}")
+                try:
+                    self.menuBarService.on_actionAdd_NIFIT_Data(item.path, color=self._item_color_rgb(name))
+                    self.restore_zoom_interaction()
+                    self._active_seg_path = item.path
+                    self._active_seg_name = name
+                except Exception as e:
+                    logger.error(f"叠加分割图像失败: {e}", exc_info=True)
+                    QtWidgets.QMessageBox.warning(
+                        self.QMainWindow, '叠加失败', f'叠加分割图像失败：\n{str(e)}'
+                    )
+                    return
+            else:
+                # 已激活，直接显示
+                self._set_seg_visibility(True)
+        else:
+            # 取消勾选 → 隐藏叠加层
+            self._set_seg_visibility(False)
+
+    def _set_seg_visibility(self, visible: bool):
+        """切换分割叠加层的 actor 可见性并刷新视图"""
+        for viewer_attr in ('viewer_seg_xy', 'viewer_seg_yz', 'viewer_seg_xz'):
+            viewer = getattr(self.menuBarService, viewer_attr, None)
+            if viewer:
+                actor = viewer.GetImageActor()
+                if actor:
+                    actor.SetVisibility(1 if visible else 0)
+        for w_attr in ('vtkWidget_XY', 'vtkWidget_YZ', 'vtkWidget_XZ'):
+            w = getattr(self.menuBarService, w_attr, None)
+            if w:
+                try:
+                    w.GetRenderWindow().Render()
+                except Exception:
+                    pass
+        logger.info(f"分割叠加层可见性 → {visible}")
+
+    def on_item_color_changed(self, name: str, data_type: str, color: str):
+        """
+        颜色选择器回调：更新对应 VTK actor 的颜色
+        - TYPE_SEG：更新分割叠加层的 LookupTable 颜色
+        - TYPE_3D：更新 STL actor 的 Property 颜色
+        """
+        from src.model.DataManagerModel import TYPE_SEG, TYPE_3D, get_data_manager
+        from src.model.VolumeRenderModel import VolumeRender
+        from PyQt5.QtGui import QColor
+
+        qc = QColor(color)
+        r, g, b = qc.redF(), qc.greenF(), qc.blueF()
+
+        if data_type == TYPE_SEG:
+            active_name = getattr(self, '_active_seg_name', None)
+            color_table = getattr(self.menuBarService, 'color_table', None)
+            if color_table and active_name == name:
+                # 只更新当前激活显示的分割颜色
+                for i in range(1, 256):
+                    color_table.SetTableValue(i, r, g, b, 1.0)
+                color_table.Build()
+                color_table.Modified()
+                for viewer_attr in ('viewer_seg_xy', 'viewer_seg_yz', 'viewer_seg_xz'):
+                    viewer = getattr(self.menuBarService, viewer_attr, None)
+                    if viewer:
+                        try:
+                            actor = viewer.GetImageActor()
+                            if actor:
+                                actor.GetMapper().Modified()
+                                actor.GetProperty().Modified()
+                        except Exception:
+                            pass
+                for viewer_attr in ('viewer_dicom_xy', 'viewer_dicom_yz', 'viewer_dicom_xz'):
+                    viewer = getattr(self.menuBarService, viewer_attr, None)
+                    if viewer:
+                        try:
+                            viewer.Render()
+                        except Exception:
+                            pass
+                for w_attr in ('vtkWidget_XY', 'vtkWidget_YZ', 'vtkWidget_XZ'):
+                    w = getattr(self.menuBarService, w_attr, None)
+                    if w:
+                        try:
+                            w.GetRenderWindow().Render()
+                        except Exception:
+                            pass
+                logger.info(f"分割颜色更新: {name} → {color}")
+            elif active_name != name:
+                # 非当前激活的分割，颜色已存入 model，下次激活时生效
+                logger.info(f"分割颜色已保存（非当前激活）: {name} → {color}")
+            else:
+                logger.warning(f"color_table 未初始化，无法更新分割颜色: {name}")
+
+        elif data_type == TYPE_3D:
+            renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+            if renderer and hasattr(VolumeRender, 'actor_stl_list'):
+                items_3d = get_data_manager().items_3d()
+                for idx, it in enumerate(items_3d):
+                    if it.name == name and idx < len(VolumeRender.actor_stl_list):
+                        actor = VolumeRender.actor_stl_list[idx]
+                        actor.GetProperty().SetColor(r, g, b)
+                        actor.GetProperty().Modified()
+                        break
+                try:
+                    self.viewModel.VolumeOrthorViewer.widget.Render()
+                except Exception:
+                    pass
+                logger.info(f"3D模型颜色更新: {name} → {color}")
+            else:
+                logger.warning(f"renderer 或 actor_stl_list 未就绪，无法更新3D颜色: {name}")
+
+    def on_action_add_data(self):
+        """统一加载数据入口 - 仿 3D Slicer Add Data 对话框"""
+        from src.ui.AddDataDialog import AddDataDialog
+        from src.model.DataManagerModel import get_data_manager, DataItem, TYPE_RAW, TYPE_SEG, TYPE_3D
+
+        dlg = AddDataDialog(self.QMainWindow)
+        if dlg.exec_() != dlg.Accepted:
+            return
+
+        selected = dlg.get_selected()
+        if not selected:
+            return
+
+        data_manager = get_data_manager()
+
+        # 将任务分为两组：原始图像优先，分割/三维数据其次
+        # 原始图像（DICOM/NPY/原始NII）必须先加载完，再加载分割叠加
+        raw_tasks = []   # (path, fmt, data_type, name)
+        seg_tasks = []   # (path, fmt, data_type, name)
+
+        for path, fmt, data_type in selected:
+            is_dir = path.endswith('/')
+            real_path = path.rstrip('/')
+            name = os.path.basename(real_path) or os.path.basename(os.path.dirname(real_path))
+
+            if fmt == 'STL' or data_type == TYPE_3D:
+                seg_tasks.append((real_path, fmt, data_type, name, is_dir))
+            elif data_type == TYPE_SEG:
+                seg_tasks.append((real_path, fmt, data_type, name, is_dir))
+            else:
+                raw_tasks.append((real_path, fmt, data_type, name, is_dir))
+
+        # 构建串行执行队列：raw_tasks 全部完成后再执行 seg_tasks
+        all_tasks = raw_tasks + seg_tasks
+        if not all_tasks:
+            return
+
+        # 用迭代器串行驱动
+        task_iter = iter(all_tasks)
+
+        def _run_next():
+            try:
+                real_path, fmt, data_type, name, is_dir = next(task_iter)
+            except StopIteration:
+                return  # 全部完成
+
+            try:
+                if fmt == 'DICOM' or (is_dir and fmt != 'NII'):
+                    dicom_path = real_path if os.path.isdir(real_path) else os.path.dirname(real_path)
+                    dicom_name = os.path.basename(dicom_path)
+                    self._current_loading_path = dicom_path
+                    self._clear_ui_state_for_new_data()
+
+                    def _dicom_ok(data, meta, _n=dicom_name, _p=dicom_path, _dt=data_type):
+                        self._on_dicom_loaded_success(data, meta)
+                        data_manager.add_item(DataItem(name=_n, data_type=_dt, fmt='DICOM', path=_p))
+                        _run_next()
+
+                    self.loading_helper.start_loading(
+                        path=dicom_path, fmt='DICOM',
+                        on_success=_dicom_ok,
+                        on_error=lambda msg: (_run_next(),)
+                    )
+
+                elif fmt == 'NII':
+                    def _nii_ok(data, meta, _n=name, _p=real_path, _dt=data_type):
+                        # 原始NII（无原始图像时）才立即显示，分割NII只存入DataManager
+                        if _dt != TYPE_SEG:
+                            self._on_nifti_loaded_success(data, meta)
+                        else:
+                            logger.info(f"分割文件 {_n} 已加载，等待用户点击激活叠加")
+                        data_manager.add_item(DataItem(
+                            name=_n, data_type=_dt, fmt='NII', path=_p,
+                            visible=False  # 默认不显示，点击后激活
+                        ))
+                        _run_next()
+
+                    self.loading_helper.start_loading(
+                        path=real_path, fmt='NII',
+                        on_success=_nii_ok,
+                        on_error=lambda msg: (_run_next(),)
+                    )
+
+                elif fmt == 'NPY':
+                    self._clear_ui_state_for_new_data()
+                    self.save_npypath_temp = ParamConstant.OUTPUT_FILE_PATH + 'npy_temp/'
+                    self.save_npypath = ParamConstant.OUTPUT_FILE_PATH + 'npy/'
+                    import glob as _glob
+                    for d in [self.save_npypath_temp, self.save_npypath]:
+                        if not os.path.exists(d):
+                            os.mkdir(d)
+                        else:
+                            for f in _glob.glob(d + '*.dcm'):
+                                try:
+                                    os.remove(f)
+                                except:
+                                    pass
+
+                    def _npy_ok(data, meta, _n=name, _p=real_path, _dt=data_type):
+                        self._on_npy_loaded_success(data, meta)
+                        data_manager.add_item(DataItem(name=_n, data_type=_dt, fmt='NPY', path=_p))
+                        _run_next()
+
+                    self.loading_helper.start_loading(
+                        path=real_path, fmt='NPY',
+                        on_success=_npy_ok,
+                        on_error=lambda msg: (_run_next(),)
+                    )
+
+                elif fmt == 'STL':
+                    from src.model.VolumeRenderModel import VolumeRender
+                    renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+                    if renderer:
+                        yellow = (223/255.0, 196/255.0, 45/255.0)
+                        actor = self.LoadSTL(real_path, color=yellow)
+                        renderer.AddActor(actor)
+                        if not hasattr(VolumeRender, 'actor_stl_list'):
+                            VolumeRender.actor_stl_list = []
+                        VolumeRender.actor_stl_list.append(actor)
+                        renderer.ResetCamera()
+                        self.viewModel.VolumeOrthorViewer.widget.Render()
+                    data_manager.add_item(DataItem(name=name, data_type=data_type, fmt='STL', path=real_path))
+                    logger.info(f"已加载: {name} [STL]")
+                    _run_next()  # STL 同步，直接继续
+
+            except Exception as e:
+                logger.error(f"加载 {real_path} 失败: {e}", exc_info=True)
+                QtWidgets.QMessageBox.warning(
+                    self.QMainWindow, '加载失败',
+                    f'文件 {name} 加载失败：\n{str(e)}'
+                )
+                _run_next()  # 出错也继续下一个
+
+        _run_next()  # 启动第一个任务

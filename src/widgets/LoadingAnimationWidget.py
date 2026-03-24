@@ -1,301 +1,190 @@
 # -*- coding: utf-8 -*-
 """
-加载动画组件
-提供文件加载时的可视化反馈，包括进度条、步骤指示和旋转动画
+加载动画组件 - 顶部进度条 + 状态栏内联提示
+不阻塞主界面操作，顶部进度条推进，状态栏显示加载状态/完成/失败
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton, QFrame
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QProgressBar
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QPainter, QColor, QPen
 
 
 class SpinnerWidget(QWidget):
-    """旋转圆圈 spinner，纯 QPainter 绘制"""
-    
-    def __init__(self, size=32, parent=None):
+    """小型旋转圆圈，用于状态栏"""
+
+    def __init__(self, size=16, parent=None):
         super().__init__(parent)
         self.setFixedSize(size, size)
         self._angle = 0
-        self._timer = None
-        
+        self._timer_id = None
+
     def start(self):
-        """启动旋转动画"""
-        if self._timer is None:
-            self._timer = self.startTimer(16)  # ~60fps
-    
+        if self._timer_id is None:
+            self._timer_id = self.startTimer(16)
+
     def stop(self):
-        """停止旋转动画"""
-        if self._timer is not None:
-            self.killTimer(self._timer)
-            self._timer = None
-    
+        if self._timer_id is not None:
+            self.killTimer(self._timer_id)
+            self._timer_id = None
+        self._angle = 0
+        self.update()
+
     def timerEvent(self, event):
-        """定时器事件，更新旋转角度"""
         self._angle = (self._angle + 6) % 360
         self.update()
-    
+
     def paintEvent(self, event):
-        """绘制旋转圆圈"""
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        w = self.width()
-        
-        # 灰色底弧（270°）
-        pen = QPen(QColor('#3a3a3a'), 3)
-        pen.setCapStyle(Qt.RoundCap)
+        s = self.width()
+        from PyQt5.QtCore import QRectF
+        pen = QPen(QColor('#555555'), 2, Qt.SolidLine, Qt.RoundCap)
         p.setPen(pen)
-        p.drawArc(4, 4, w-8, w-8, 0, 270*16)
-        
-        # 蓝色动画弧（90°）
+        p.drawArc(QRectF(2, 2, s-4, s-4), 0, 270*16)
         pen.setColor(QColor('#378ADD'))
         p.setPen(pen)
-        from PyQt5.QtCore import QRectF
-        p.drawArc(QRectF(4, 4, w-8, w-8), (-self._angle)*16, 90*16)
+        p.drawArc(QRectF(2, 2, s-4, s-4), -self._angle*16, 90*16)
 
 
-class LoadingOverlay(QWidget):
-    """
-    半透明遮罩，叠加在目标 widget 上方
-    显示加载进度、步骤和取消按钮
-    """
-    
-    cancelled = pyqtSignal()
-    
-    def __init__(self, parent, fmt='', filename=''):
+class TopProgressBar(QWidget):
+    """顶部进度条，显示在主窗口顶部"""
+
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        self.setStyleSheet('background: rgba(0, 0, 0, 0.75)')
-        
-        # 用于淡出动画
-        self._opacity = 1.0
-        self._fade_timer = None
-        
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(16)
-        
-        # 背景卡片 - 更大更美观
-        card = QFrame()
-        card.setFixedWidth(380)
-        card.setStyleSheet('''
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2d2d2d, stop:1 #252525);
-                border: 1px solid #404040;
-                border-radius: 16px;
-            }
-        ''')
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(16)
-        
-        # 顶部：spinner + 文件信息
-        top_row = QHBoxLayout()
-        top_row.setSpacing(16)
-        
-        self.spinner = SpinnerWidget(40)  # 更大的 spinner
-        top_row.addWidget(self.spinner)
-        
-        info = QVBoxLayout()
-        info.setSpacing(6)
-        
-        # 文件名 - 更大更清晰
-        self.lbl_name = QLabel(filename)
-        self.lbl_name.setStyleSheet('''
-            font-weight: 600; 
-            font-size: 15px; 
-            color: #ffffff;
-            letter-spacing: 0.5px;
-        ''')
-        self.lbl_name.setWordWrap(True)
-        
-        # 格式信息 - 更清晰的层次
-        self.lbl_fmt = QLabel(f'{fmt} · 正在加载...')
-        self.lbl_fmt.setStyleSheet('''
-            font-size: 12px; 
-            color: #aaaaaa;
-            letter-spacing: 0.3px;
-        ''')
-        
-        info.addWidget(self.lbl_name)
-        info.addWidget(self.lbl_fmt)
-        top_row.addLayout(info, 1)
-        
-        card_layout.addLayout(top_row)
-        
-        # 进度条 - 更高更明显
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(6)
-        self.progress_bar.setStyleSheet('''
-            QProgressBar { 
-                background: #1a1a1a; 
-                border-radius: 3px; 
-                border: none; 
-            }
-            QProgressBar::chunk { 
+        self.setFixedHeight(3)
+        self.hide()
+
+        self.progress = QProgressBar(self)
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        self.progress.setStyleSheet('''
+            QProgressBar { background: transparent; border: none; }
+            QProgressBar::chunk {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 #4a9eff, stop:1 #378ADD);
-                border-radius: 3px; 
             }
         ''')
-        card_layout.addWidget(self.progress_bar)
-        
-        # 步骤描述 - 更大更清晰
-        self.lbl_step = QLabel('准备中...')
-        self.lbl_step.setStyleSheet('''
-            font-size: 13px; 
-            color: #bbbbbb;
-            font-weight: 500;
-            letter-spacing: 0.3px;
-        ''')
-        self.lbl_step.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(self.lbl_step)
-        
-        # 步骤列表容器
-        self.step_list = QWidget()
-        step_v = QVBoxLayout(self.step_list)
-        step_v.setContentsMargins(0, 4, 0, 4)
-        step_v.setSpacing(6)
-        card_layout.addWidget(self.step_list)
-        
-        self.step_widgets = []
-        
-        # 取消按钮 - 更美观
-        self.cancel_btn = QPushButton('取消')
-        self.cancel_btn.setFixedHeight(32)
-        self.cancel_btn.setCursor(Qt.PointingHandCursor)
-        self.cancel_btn.setStyleSheet('''
-            QPushButton {
-                background: transparent;
-                border: 1.5px solid #555555;
-                border-radius: 16px;
-                color: #aaaaaa;
-                font-size: 12px;
-                font-weight: 500;
-                padding: 0 20px;
-                letter-spacing: 0.5px;
-            }
-            QPushButton:hover {
-                background: rgba(211, 47, 47, 0.15);
-                border-color: #d32f2f;
-                color: #ff5252;
-            }
-            QPushButton:pressed {
-                background: rgba(211, 47, 47, 0.25);
-            }
-        ''')
-        self.cancel_btn.clicked.connect(self.cancelled.emit)
-        card_layout.addWidget(self.cancel_btn, alignment=Qt.AlignCenter)
-        
-        layout.addWidget(card)
-        self.hide()
-    
-    def set_steps(self, steps: list):
-        """传入步骤名称列表，动态生成步骤行"""
-        # 清除旧步骤
-        for sw in self.step_widgets:
-            sw.setParent(None)
-            sw.deleteLater()
-        self.step_widgets.clear()
-        
-        # 创建新步骤 - 更美观的样式
-        for name in steps:
-            row = QLabel(f'○  {name}')
-            row.setStyleSheet('''
-                font-size: 12px; 
-                color: #777777;
-                padding: 2px 0;
-                letter-spacing: 0.3px;
-            ''')
-            self.step_list.layout().addWidget(row)
-            self.step_widgets.append(row)
-    
-    def mark_step(self, idx: int, state: str):
-        """
-        标记步骤状态
-        state: 'pending' | 'active' | 'done'
-        """
-        if idx >= len(self.step_widgets):
-            return
-        
-        w = self.step_widgets[idx]
-        name = w.text().split('  ', 1)[-1]
-        
-        if state == 'done':
-            w.setText(f'✓  {name}')
-            w.setStyleSheet('''
-                font-size: 12px; 
-                color: #4CAF50;
-                font-weight: 500;
-                padding: 2px 0;
-                letter-spacing: 0.3px;
-            ''')
-        elif state == 'active':
-            w.setText(f'›  {name}')
-            w.setStyleSheet('''
-                font-size: 12px; 
-                color: #4a9eff; 
-                font-weight: 600;
-                padding: 2px 0;
-                letter-spacing: 0.3px;
-            ''')
-        else:
-            w.setText(f'○  {name}')
-            w.setStyleSheet('''
-                font-size: 12px; 
-                color: #777777;
-                padding: 2px 0;
-                letter-spacing: 0.3px;
-            ''')
-    
-    def update_progress(self, pct: int, step_desc: str):
-        """更新进度条和步骤描述"""
-        self.progress_bar.setValue(pct)
-        self.lbl_step.setText(step_desc)
-    
-    def show_over(self, target: QWidget):
-        """在目标控件上方显示遮罩"""
-        self.setParent(target)
-        self.resize(target.size())
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.progress)
+
+    def set_progress(self, value):
+        self.progress.setValue(value)
+
+    def start_loading(self):
+        self.progress.setValue(0)
         self.show()
         self.raise_()
-        self.spinner.start()
-    
-    def fade_out_and_close(self):
-        """淡出动画后关闭"""
-        # 停止 spinner
-        self.spinner.stop()
-        
-        # 创建淡出动画
-        from PyQt5.QtCore import QTimer
-        self._opacity = 1.0
-        self._fade_timer = QTimer()
-        self._fade_timer.timeout.connect(self._fade_step)
-        self._fade_timer.start(16)  # 约60fps
-    
-    def _fade_step(self):
-        """淡出动画步骤"""
-        self._opacity -= 0.08  # 每步减少8%，约需12帧（200ms）
-        
-        if self._opacity <= 0:
-            self._fade_timer.stop()
-            self.hide()
-            self.deleteLater()
-        else:
-            # 更新透明度
-            self.setStyleSheet(f'background: rgba(0, 0, 0, {self._opacity * 0.75})')
-    
-    def hideEvent(self, event):
-        """隐藏时停止动画"""
-        self.spinner.stop()
-        if self._fade_timer:
-            self._fade_timer.stop()
-        super().hideEvent(event)
-    
+
+    def finish_loading(self):
+        self.progress.setValue(100)
+        QTimer.singleShot(400, self.hide)
+
     def resizeEvent(self, event):
-        """跟随父控件大小变化"""
         if self.parent():
-            self.resize(self.parent().size())
+            self.setFixedWidth(self.parent().width())
+
+
+class StatusBarWidget(QWidget):
+    """嵌入状态栏的加载状态组件"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 0, 8, 0)
+        layout.setSpacing(6)
+
+        self.spinner = SpinnerWidget(16, self)
+        layout.addWidget(self.spinner)
+
+        self.message_label = QLabel()
+        self.message_label.setStyleSheet('font-size: 12px;')
+        layout.addWidget(self.message_label)
+
+        self.hide()
+
+    def show_loading(self, fmt, filename=''):
+        """显示加载中"""
+        msg = f'正在加载 {fmt}'
+        if filename:
+            msg += f'  {filename}'
+        self.message_label.setText(msg)
+        self.message_label.setStyleSheet('font-size: 12px;')
+        self.spinner.start()
+        self.show()
+
+    def show_success(self, fmt, filename=''):
+        """显示成功"""
+        self.spinner.stop()
+        msg = f'✓  {fmt} 加载完成'
+        if filename:
+            msg += f'  {filename}'
+        self.message_label.setText(msg)
+        self.message_label.setStyleSheet('font-size: 12px; color: #4CAF50;')
+        QTimer.singleShot(4000, self.hide)
+
+    def show_error(self, fmt, error_msg=''):
+        """显示失败"""
+        self.spinner.stop()
+        msg = f'✗  {fmt} 加载失败'
+        if error_msg:
+            short = error_msg[:40] + '...' if len(error_msg) > 40 else error_msg
+            msg += f'  {short}'
+        self.message_label.setText(msg)
+        self.message_label.setStyleSheet('font-size: 12px; color: #f44336;')
+        QTimer.singleShot(6000, self.hide)
+
+
+class LoadingIndicator:
+    """加载指示器管理类 - 顶部进度条 + 状态栏内联提示"""
+
+    def __init__(self, main_window):
+        self.main_window = main_window
+
+        # 顶部进度条
+        self.top_progress = TopProgressBar(main_window)
+        self.top_progress.move(0, 0)
+        self.top_progress.setFixedWidth(main_window.width())
+        self.top_progress.raise_()
+
+        # 状态栏组件
+        self.status_widget = StatusBarWidget()
+        main_window.statusBar().addPermanentWidget(self.status_widget)
+        main_window.statusBar().show()
+
+        self._is_loading = False
+        self._current_fmt = ''
+        self._current_filename = ''
+
+    def start_loading(self, fmt, filename=''):
+        self._is_loading = True
+        self._current_fmt = fmt
+        self._current_filename = filename
+        self.top_progress.start_loading()
+        self.status_widget.show_loading(fmt, filename)
+
+    def update_progress(self, value):
+        if self._is_loading:
+            self.top_progress.set_progress(value)
+
+    def finish_success(self):
+        if self._is_loading:
+            self._is_loading = False
+            self.top_progress.finish_loading()
+            self.status_widget.show_success(self._current_fmt, self._current_filename)
+
+    def finish_error(self, error_msg=''):
+        if self._is_loading:
+            self._is_loading = False
+            self.top_progress.finish_loading()
+            self.status_widget.show_error(self._current_fmt, error_msg)
+
+    def is_loading(self):
+        return self._is_loading
+
+    def resize_event(self):
+        """主窗口大小改变时调用"""
+        self.top_progress.setFixedWidth(self.main_window.width())

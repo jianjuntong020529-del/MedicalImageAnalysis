@@ -159,7 +159,7 @@ class MenuBarService:
         except Exception:
             logger.exception('Create Volume error')
 
-    def on_actionAdd_NIFIT_Data(self, path, slice_index=None):
+    def on_actionAdd_NIFIT_Data(self, path, slice_index=None, color=None):
         """
         加载NIFTI分割结果并与DICOM图像进行叠加显示
         采用重建查看器的方式，创建新的DICOM和分割查看器
@@ -167,33 +167,25 @@ class MenuBarService:
         Args:
             path: NIFTI文件路径
             slice_index: 可选的切片索引，如果为None则使用默认切片
-            
-        Raises:
-            FileNotFoundError: 当NIFTI文件不存在时
-            ValueError: 当文件格式无效或坐标系统不兼容时
-            RuntimeError: 当VTK操作失败时
+            color: 可选的颜色元组 (r, g, b)，范围 0-1，默认随机颜色
         """
         try:
             logger.info(f"Loading NIFTI segmentation file: {path}")
 
-            # 验证文件存在性
             if not os.path.exists(path):
                 error_msg = f"NIFTI file does not exist: {path}"
                 logger.error(error_msg)
                 raise FileNotFoundError(error_msg)
             
-            # 验证文件扩展名
             if not (path.endswith('.nii') or path.endswith('.nii.gz')):
                 error_msg = f"Invalid NIFTI file format: {path}. Expected .nii or .nii.gz"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
             if DataAndModelType.DATA_TYPE is None:
-                # 类型为空则只需要导入nii文件，将该问卷转换为DICOM图像
                 self.load_nii(path)
             else:
-                # 使用重建查看器的方式创建DICOM和分割视图
-                self.imageblend_seg_mask(path,slice_index)
+                self.imageblend_seg_mask(path, slice_index, color=color)
             
             logger.info("NIFTI segmentation loaded and overlaid successfully")
             
@@ -436,7 +428,7 @@ class MenuBarService:
 
         logger.info("NII data loading and visualization completed successfully")
 
-    def imageblend_seg_mask(self,path, slice_index=None):
+    def imageblend_seg_mask(self, path, slice_index=None, color=None):
         """
         创建DICOM和分割图像的混合显示
         重建DICOM查看器和分割查看器，实现叠加显示
@@ -530,8 +522,12 @@ class MenuBarService:
                 self.color_table.SetNumberOfColors(256)
                 self.color_table.SetTableRange(data_min, data_max)
                 self.color_table.SetTableValue(0, 0.0, 0.0, 1.0, 0.0)  # 背景透明
+                if color is not None:
+                    r, g, b = color
+                else:
+                    r, g, b = 1.0, 0.0, 0.0  # 默认红色
                 for i in range(1, 256):
-                    self.color_table.SetTableValue(i, 1, 0, 0, 1.0)  # 红色不透明
+                    self.color_table.SetTableValue(i, r, g, b, 1.0)
                 self.color_table.Build()
             except Exception as e:
                 error_msg = "Failed to create color lookup table"

@@ -68,18 +68,28 @@ class LoadWorker(QThread):
     def _load_dicom(self):
         """加载 DICOM 文件夹"""
         steps = ['扫描文件列表', '读取头信息', '排列切片', '加载体素', '构建体积']
-        
+
+        # 若传入的是单个 .dcm 文件，自动取其父目录
+        dicom_dir = self.path
+        if os.path.isfile(dicom_dir):
+            dicom_dir = os.path.dirname(dicom_dir)
+
         # 步骤 0: 扫描文件列表
         self.progress.emit(0, steps[0])
-        files = glob.glob(self.path + '/**/*.dcm', recursive=True)
+        files = glob.glob(dicom_dir + '/**/*.dcm', recursive=True)
         if self._cancelled:
             return
         self.step_done.emit(0)
-        
+
         # 步骤 1: 读取头信息
         self.progress.emit(20, steps[1])
         reader = sitk.ImageSeriesReader()
-        names = reader.GetGDCMSeriesFileNames(self.path)
+        names = reader.GetGDCMSeriesFileNames(dicom_dir)
+        if not names:
+            raise RuntimeError(
+                f'在目录 "{dicom_dir}" 中未找到有效的 DICOM 序列，'
+                '请确认该目录包含 .dcm 文件。'
+            )
         if self._cancelled:
             return
         self.step_done.emit(1)
@@ -110,7 +120,7 @@ class LoadWorker(QThread):
             '层数': str(array.shape[2]),
             '尺寸': f'{array.shape[0]} × {array.shape[1]}',
             '体素间距': str(image.GetSpacing()),
-            '路径': self.path,
+            '路径': dicom_dir,
         }
         
         self.progress.emit(100, '完成')
