@@ -564,6 +564,50 @@ class MenuBarService:
             except Exception:
                 pass
 
+    def toggle_volume_visibility(self, visible: bool):
+        """控制体绘制对象的可见性（STL 优先时隐藏，STL 全删后恢复）。
+        使用 SetVisibility 而非 Add/RemoveVolume，避免重复添加问题。
+        """
+        from src.model.VolumeRenderModel import VolumeRender
+        volume = getattr(VolumeRender, 'volume_cbct', None)
+        if volume is None:
+            return
+        volume.SetVisibility(1 if visible else 0)
+        try:
+            self.viewModel.VolumeOrthorViewer.widget.Render()
+        except Exception:
+            pass
+        logger.info(f"体绘制可见性 → {visible}")
+
+    def hide_raw_background(self):
+        """隐藏三个正交视图的背景原始图像 Actor，保留分割图层 Actor。"""
+        for ortho in (
+            self.viewModel.AxialOrthoViewer,
+            self.viewModel.SagittalOrthoViewer,
+            self.viewModel.CoronalOrthoViewer,
+        ):
+            try:
+                ortho.viewer.GetImageActor().SetVisibility(0)
+            except Exception:
+                pass
+        self.refresh_all_views()
+        logger.info("原始图像背景已隐藏")
+
+    def clear_all_raw_renderers(self):
+        """彻底清空四视图（无分割叠加时删除原始图像调用）。"""
+        for ortho in (
+            self.viewModel.AxialOrthoViewer,
+            self.viewModel.SagittalOrthoViewer,
+            self.viewModel.CoronalOrthoViewer,
+        ):
+            try:
+                ortho.viewer.GetImageActor().SetVisibility(0)
+            except Exception:
+                pass
+        self.refresh_all_views()
+        self.toggle_volume_visibility(False)
+        logger.info("四视图已清空")
+
 
     def create_dicom_viewer(self, ortho_viewer, vtkWidget, label, verticalSlider, id, slice_index):
         """
@@ -947,6 +991,12 @@ class MenuBarService:
             logger.debug("mouse wheel event not exist", exc_info=True)
 
     def update_volume_viewer(self):
+        # 清除旧 Renderer，避免多次加载时叠加
+        rw = self.vtkWidget_Volume.GetRenderWindow()
+        old_renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+        if old_renderer is not None:
+            rw.RemoveRenderer(old_renderer)
+
         # 创建体绘制映射器
         volumeMapper = vtk.vtkGPUVolumeRayCastMapper()  # 提高渲染性能
         volumeMapper.SetInputConnection(self.baseModelClass.imageReader.GetOutputPort())

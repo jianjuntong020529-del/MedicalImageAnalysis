@@ -209,7 +209,7 @@ class DataItemRow(QWidget):
         layout.setContentsMargins(6, 0, 4, 0)
         layout.setSpacing(5)
 
-        # 复选框（控制显示/隐藏）
+        # 复选框（控制显示/隐藏）— 原始图像不提供复选框（排他性显示，通过点击切换）
         self.chk = QCheckBox()
         self.chk.setChecked(item.visible)
         self.chk.setFixedSize(16, 16)
@@ -224,6 +224,8 @@ class DataItemRow(QWidget):
         ''')
         self.chk.stateChanged.connect(self._on_check)
         layout.addWidget(self.chk)
+        if item.data_type == TYPE_RAW:
+            self.chk.hide()
 
         # 颜色圆点（SEG/3D 可点击选色）
         clickable = item.data_type in (TYPE_SEG, TYPE_3D)

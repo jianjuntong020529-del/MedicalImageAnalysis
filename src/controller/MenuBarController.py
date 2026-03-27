@@ -81,6 +81,9 @@ class MenuBarController(MenuBarManager):
 
         self.menuBarService = MenuBarService(self.baseModelClass, self.viewModel)
 
+        # 记录当前四视图显示的原始图像名称（排他性）
+        self.active_raw_name: str = None
+
         self.verticalSlider_XY.valueChanged.connect(self.valuechange1)
         self.verticalSlider_YZ.valueChanged.connect(self.valuechange2)
         self.verticalSlider_XZ.valueChanged.connect(self.valuechange3)
@@ -188,34 +191,22 @@ class MenuBarController(MenuBarManager):
         """DICOM 加载成功回调"""
         try:
             logger.info(f"DICOM 数据加载成功: {meta}")
-            
-            # 设置数据类型
             DataAndModelType.DATA_TYPE = 'DICOM'
-            
-            # 更新路径
             setDirPath(self._current_loading_path)
-            
-            # 更新 reader
             self.reader.SetDirectoryName(self._current_loading_path)
             self.reader.Update()
-            
-            # 更新数据信息
             self.baseModelClass.imageReader = self.reader
             self.baseModelClass.update_data_information()
-            
-            # 设置标注主题名称
             ParamConstant.ANNOTATION_SUBJECT_NAME = self._current_loading_path.split('/')[-1]
-            
-            # 调用原有的服务层方法更新 UI
             self.menuBarService.on_actionAdd_DICOM_Data()
-            
+            # 记录当前激活的原始图像（用文件夹名作为 key）
+            self.active_raw_name = os.path.basename(self._current_loading_path.rstrip('/'))
+            self.manage_3d_view_priority()
             logger.info("DICOM 数据处理完成")
-            
         except Exception as e:
             logger.error(f"处理 DICOM 数据时出错: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(
-                self.QMainWindow,
-                "数据处理错误",
+                self.QMainWindow, "数据处理错误",
                 f"加载成功但处理数据时出错：\n{str(e)}"
             )
     
@@ -588,6 +579,9 @@ class MenuBarController(MenuBarManager):
             
             # 调用服务层方法
             self.menuBarService.on_actionAdd_NPY_Data(meta['slice_thickness'])
+            # 记录当前激活的原始图像
+            self.active_raw_name = os.path.basename(meta["路径"])
+            self.manage_3d_view_priority()
             
             # 显示成功消息
             if self.QMainWindow.statusBar():
@@ -749,10 +743,10 @@ class MenuBarController(MenuBarManager):
 
     def on_data_item_deleted(self, name: str, data_type: str):
         """
-        数据管理器删除回调
-        - 分割图像：移除叠加，恢复纯 DICOM 视图
-        - 三维数据：从体绘制窗口移除对应 actor；若全部删除则恢复体绘制
-        - 原始图像：清空四视图
+        数据管理器删除回调：
+        - TYPE_SEG：从渲染器移除图层 Actor
+        - TYPE_3D：移除 STL actor，按优先级决定是否恢复体绘制
+        - TYPE_RAW：若删除的是当前底图，清空四视图；否则仅从列表移除
         """
         from src.model.DataManagerModel import TYPE_SEG, TYPE_3D, TYPE_RAW, get_data_manager
         from src.model.VolumeRenderModel import VolumeRender
@@ -760,21 +754,17 @@ class MenuBarController(MenuBarManager):
         data_manager = get_data_manager()
 
         if data_type == TYPE_SEG:
-            # 从渲染器移除该图层并清理字典
             self.menuBarService.remove_seg_layer(name)
 
         elif data_type == TYPE_3D:
             renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
             if renderer and hasattr(VolumeRender, 'actor_stl_list'):
-                # 清空所有 STL actor，重新只加载剩余的
                 for actor in VolumeRender.actor_stl_list:
                     try:
                         renderer.RemoveActor(actor)
-                    except:
+                    except Exception:
                         pass
                 VolumeRender.actor_stl_list.clear()
-
-                # 重新加载剩余 3D 数据
                 remaining_3d = data_manager.items_3d()
                 if remaining_3d:
                     yellow = (223/255.0, 196/255.0, 45/255.0)
@@ -785,20 +775,45 @@ class MenuBarController(MenuBarManager):
                             VolumeRender.actor_stl_list.append(actor)
                         except Exception as e:
                             logger.error(f"重新加载 STL {it.name} 失败: {e}")
-                else:
-                    # 没有 3D 数据了，恢复体绘制（如果有原始图像）
-                    if hasattr(VolumeRender, 'volume_cbct') and VolumeRender.volume_cbct:
-                        try:
-                            renderer.AddVolume(VolumeRender.volume_cbct)
-                        except:
-                            pass
-
                 renderer.ResetCamera()
                 self.viewModel.VolumeOrthorViewer.widget.Render()
+            self.manage_3d_view_priority()
 
         elif data_type == TYPE_RAW:
-            # 原始图像删除：清空四视图（简单重置）
-            logger.info(f"原始图像 {name} 已删除，四视图将保持当前状态")
+            if self.active_raw_name != name:
+                # 删除的不是当前显示的底图，无需更新视图
+                logger.info(f"移除未激活原始图像: {name}")
+                return
+            # 删除的是当前底图
+            self.active_raw_name = None
+            has_seg = len(self.menuBarService.seg_layers) > 0
+            if has_seg:
+                # 保留分割 Actor，仅隐藏背景底图
+                self.menuBarService.hide_raw_background()
+            else:
+                # 彻底清空四视图和体绘制
+                self.menuBarService.clear_all_raw_renderers()
+            self.manage_3d_view_priority()
+
+    def manage_3d_view_priority(self):
+        """
+        三维窗口优先级：STL 优先于体绘制。
+        - 有 STL → 隐藏体绘制
+        - 无 STL 且有原始图像 → 恢复体绘制
+        - 无 STL 且无原始图像 → 保持隐藏
+        """
+        from src.model.DataManagerModel import get_data_manager
+        has_stl = len(get_data_manager().items_3d()) > 0
+        has_raw = self.active_raw_name is not None
+        if has_stl:
+            self.menuBarService.toggle_volume_visibility(False)
+            logger.info("3D优先级: STL 存在，隐藏体绘制")
+        elif has_raw:
+            self.menuBarService.toggle_volume_visibility(True)
+            logger.info("3D优先级: 无 STL，恢复体绘制")
+        else:
+            self.menuBarService.toggle_volume_visibility(False)
+            logger.info("3D优先级: 无 STL 无原始图像，保持隐藏")
 
     def _handle_npy_loading_success(self, npy_path: str):
         """
@@ -960,8 +975,8 @@ class MenuBarController(MenuBarManager):
             # 重置相机以显示所有模型
             self.renderer_volume.ResetCamera()
             self.vtkWidget_Volume.Render()
-            
             logger.info(f"成功加载 {len(VolumeRender.actor_stl_list)} 个STL模型")
+            self.manage_3d_view_priority()
             
         else:
             logger.info("恢复体渲染")
@@ -1575,16 +1590,44 @@ class MenuBarController(MenuBarManager):
     def on_item_activated(self, name: str, data_type: str, path: str):
         """
         数据管理器点击行时触发：
-        - 分割图像(TYPE_SEG)：若该图层尚未加载则叠加，已加载则切换可见
-        - 原始图像(TYPE_RAW)：切换主视图到该数据
-        - 三维数据(TYPE_3D)：无需处理（已在加载时渲染）
+        - TYPE_RAW：替换四视图底图（排他性），更新 active_raw_name
+        - TYPE_SEG：若图层未加载则叠加，已加载则切换可见
+        - TYPE_3D：无需处理（加载时已渲染）
         """
         from src.model.DataManagerModel import TYPE_SEG, TYPE_RAW, TYPE_3D, get_data_manager
         if not path or not os.path.exists(path):
             logger.warning(f"激活数据路径不存在: {path}")
             return
 
-        if data_type == TYPE_SEG:
+        if data_type == TYPE_RAW:
+            if self.active_raw_name == name:
+                return  # 已是当前底图，无需重复加载
+            logger.info(f"切换原始图像: {name} → {path}")
+            try:
+                # 根据格式走对应加载路径
+                item = get_data_manager().get_item(name)
+                fmt = item.fmt if item else ''
+                if fmt == 'DICOM' or os.path.isdir(path):
+                    self._current_loading_path = path
+                    self._clear_ui_state_for_new_data()
+                    self.loading_helper.start_loading(
+                        path=path, fmt='DICOM',
+                        on_success=lambda data, meta, _n=name: (
+                            self._on_dicom_loaded_success(data, meta),
+                            setattr(self, 'active_raw_name', _n)
+                        ),
+                        on_error=lambda msg: None
+                    )
+                else:
+                    # NII 作为原始图像（无底图时）
+                    self.menuBarService.on_actionAdd_NIFIT_Data(path, item_name=name)
+                    self.restore_zoom_interaction()
+                    self.active_raw_name = name
+                self.manage_3d_view_priority()
+            except Exception as e:
+                logger.error(f"切换原始图像失败: {e}", exc_info=True)
+
+        elif data_type == TYPE_SEG:
             logger.info(f"激活分割图像: {name} → {path}")
             try:
                 if name not in self.menuBarService.seg_layers:
@@ -1598,15 +1641,6 @@ class MenuBarController(MenuBarManager):
                 QtWidgets.QMessageBox.warning(
                     self.QMainWindow, '叠加失败', f'叠加分割图像失败：\n{str(e)}'
                 )
-
-        elif data_type == TYPE_RAW:
-            logger.info(f"激活原始图像: {name} → {path}")
-            try:
-                self.menuBarService.on_actionAdd_NIFIT_Data(path, item_name=name)
-                self.restore_zoom_interaction()
-                get_data_manager().set_visible(name, True)
-            except Exception as e:
-                logger.error(f"显示原始图像失败: {e}", exc_info=True)
 
     def on_item_visibility_changed(self, name: str, data_type: str, visible: bool):
         """
