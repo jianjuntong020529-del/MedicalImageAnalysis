@@ -552,6 +552,12 @@ class MenuBarService:
         self.refresh_all_views()
         logger.info(f"Segmentation layer '{item_name}' removed.")
 
+    def clear_all_seg_layers(self):
+        """移除所有分割图层的 Actor 并清空字典（切换原始图像时调用）。"""
+        for item_name in list(self.seg_layers.keys()):
+            self.remove_seg_layer(item_name)
+        logger.info("All segmentation layers cleared.")
+
     def refresh_all_views(self):
         """强制刷新三个正交视图的 VTK 窗口。"""
         for ortho in (
@@ -566,13 +572,18 @@ class MenuBarService:
 
     def toggle_volume_visibility(self, visible: bool):
         """控制体绘制对象的可见性（STL 优先时隐藏，STL 全删后恢复）。
-        使用 SetVisibility 而非 Add/RemoveVolume，避免重复添加问题。
+        恢复显示时重置相机，确保 volume 居中且大小合适。
         """
         from src.model.VolumeRenderModel import VolumeRender
         volume = getattr(VolumeRender, 'volume_cbct', None)
         if volume is None:
             return
         volume.SetVisibility(1 if visible else 0)
+        if visible:
+            # 恢复显示时重置相机，适配 volume 包围盒
+            renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+            if renderer:
+                renderer.ResetCamera()
         try:
             self.viewModel.VolumeOrthorViewer.widget.Render()
         except Exception:
@@ -991,17 +1002,15 @@ class MenuBarService:
             logger.debug("mouse wheel event not exist", exc_info=True)
 
     def update_volume_viewer(self):
-        # 清除旧 Renderer，避免多次加载时叠加
-        rw = self.vtkWidget_Volume.GetRenderWindow()
-        old_renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
-        if old_renderer is not None:
-            rw.RemoveRenderer(old_renderer)
+        from src.model.VolumeRenderModel import VolumeRender
+        from src.model.DataManagerModel import get_data_manager
 
-        # 创建体绘制映射器
-        volumeMapper = vtk.vtkGPUVolumeRayCastMapper()  # 提高渲染性能
+        rw = self.vtkWidget_Volume.GetRenderWindow()
+
+        # ── 构建新的 volume 对象（mapper + property）──────────────────────────
+        volumeMapper = vtk.vtkGPUVolumeRayCastMapper()
         volumeMapper.SetInputConnection(self.baseModelClass.imageReader.GetOutputPort())
 
-        # 获取数据的标量范围以适应不同数据类型
         scalar_range = self.baseModelClass.scalerRange
         data_min, data_max = scalar_range
         logger.debug(f"Volume viewer scalar range: {data_min} - {data_max}")
@@ -1062,20 +1071,38 @@ class MenuBarService:
         volume_cbct = vtk.vtkVolume()
         volume_cbct.SetMapper(volumeMapper)
         volume_cbct.SetProperty(volumeProperty)
-        # 添加体绘制到渲染器
-        renderer = vtk.vtkRenderer()
-        renderer.SetBackground(0.5, 0.5, 0.5)
-        renderer.AddVolume(volume_cbct)
-        renderer.ResetCamera()
-        self.vtkWidget_Volume.GetRenderWindow().AddRenderer(renderer)
+
+        # ── Renderer 管理：有 STL 时复用旧 renderer，无 STL 时重建 ──────────
+        has_stl = len(get_data_manager().items_3d()) > 0
+        old_renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+
+        if has_stl and old_renderer is not None:
+            # 复用旧 renderer：移除旧 volume，加入新 volume（隐藏），STL actors 保留
+            if VolumeRender.volume_cbct is not None:
+                try:
+                    old_renderer.RemoveVolume(VolumeRender.volume_cbct)
+                except Exception:
+                    pass
+            volume_cbct.SetVisibility(0)   # 有 STL 时 volume 保持隐藏
+            old_renderer.AddVolume(volume_cbct)
+            renderer = old_renderer
+        else:
+            # 无 STL：移除旧 renderer，创建新 renderer
+            if old_renderer is not None:
+                rw.RemoveRenderer(old_renderer)
+            renderer = vtk.vtkRenderer()
+            renderer.SetBackground(0.5, 0.5, 0.5)
+            renderer.AddVolume(volume_cbct)
+            renderer.ResetCamera()
+            rw.AddRenderer(renderer)
 
         VolumeRender.volume_cbct = volume_cbct
 
-        style = vtk.vtkInteractorStyleTrackballCamera()  # 交互器样式的一种，该样式下，用户是通过控制相机对物体作旋转、放大、缩小等操作
+        style = vtk.vtkInteractorStyleTrackballCamera()
         style.SetDefaultRenderer(renderer)
         style.EnabledOn()
         self.iren_Volume.SetInteractorStyle(style)
-        # ==================添加一个三维坐标指示=======================================
+
         axesActor = vtk.vtkAxesActor()
         axes = vtk.vtkOrientationMarkerWidget()
         axes.SetOrientationMarker(axesActor)

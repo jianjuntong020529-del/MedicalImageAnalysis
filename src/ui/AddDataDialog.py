@@ -141,7 +141,7 @@ def _guess_type(path):
         return 'NPY', TYPE_RAW
 
     elif name.endswith(('.stl', '.vtk')):
-        return 'MODEL', TYPE_3D
+        return 'STL', TYPE_3D
 
     elif name.endswith(('.im0', '.bim')):
         return 'IM0', TYPE_RAW

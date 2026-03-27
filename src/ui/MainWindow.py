@@ -175,6 +175,11 @@ class Ui_MainWindow(object):
             self.menuBarController.on_data_item_deleted
         )
 
+        # 三维数据全局颜色 → 统一更新所有 STL actor
+        self.data_manager_panel.global_3d_color_changed.connect(
+            self.menuBarController.on_global_3d_color_changed
+        )
+
         # 对比度调整栏
         self.contrast = ContrastController(self.baseModelClass, self.OrthoViewerModel, self.widget)
         self.tool_bar_layout.addWidget(self.contrast.widget_contrast)

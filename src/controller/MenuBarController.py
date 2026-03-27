@@ -734,12 +734,16 @@ class MenuBarController(MenuBarManager):
                     logger.error(f"隐藏叠加失败: {e}", exc_info=True)
 
         elif data_type == TYPE_3D:
-            # 控制 STL actor 显示/隐藏
-            renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
-            if renderer and hasattr(VolumeRender, 'actor_stl_list'):
-                for actor in VolumeRender.actor_stl_list:
-                    actor.SetVisibility(1 if visible else 0)
-                self.viewModel.VolumeOrthorViewer.widget.Render()
+            # 通过 DataItem.actor 单独控制该模型的显示/隐藏
+            item = data_manager.get_item(name)
+            actor = item.actor if item else None
+            if actor:
+                actor.SetVisibility(1 if visible else 0)
+                try:
+                    self.viewModel.VolumeOrthorViewer.widget.Render()
+                except Exception:
+                    pass
+                logger.info(f"3D模型 '{name}' 可见性 → {visible}")
 
     def on_data_item_deleted(self, name: str, data_type: str):
         """
@@ -758,23 +762,35 @@ class MenuBarController(MenuBarManager):
 
         elif data_type == TYPE_3D:
             renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+            # 先从 DataManager 找到被删项的 actor（remove_item 已把它从列表移除，
+            # 但信号触发时 item 还在，通过 actor_stl_list 反查）
+            from src.model.VolumeRenderModel import VolumeRender
+            # 遍历 actor_stl_list 找到对应 actor 并移除
+            # 由于 DataItem 已被 model.remove_item 删除，这里用 actor_stl_list 配合
+            # 剩余 items_3d 来确定哪个 actor 需要被移除
             if renderer and hasattr(VolumeRender, 'actor_stl_list'):
+                remaining_names = {it.name for it in data_manager.items_3d()}
+                to_remove = []
+                to_keep = []
+                # actor_stl_list 与 items_3d 在删除前是一一对应的
+                # 现在 items_3d 已少了被删项，重建列表
                 for actor in VolumeRender.actor_stl_list:
+                    # 通过 actor 反查 DataItem（利用 DataItem.actor 引用）
+                    matched = False
+                    for it in data_manager.items_3d():
+                        if it.actor is actor:
+                            matched = True
+                            break
+                    if matched:
+                        to_keep.append(actor)
+                    else:
+                        to_remove.append(actor)
+                for actor in to_remove:
                     try:
                         renderer.RemoveActor(actor)
                     except Exception:
                         pass
-                VolumeRender.actor_stl_list.clear()
-                remaining_3d = data_manager.items_3d()
-                if remaining_3d:
-                    yellow = (223/255.0, 196/255.0, 45/255.0)
-                    for it in remaining_3d:
-                        try:
-                            actor = self.LoadSTL(it.path, color=yellow)
-                            renderer.AddActor(actor)
-                            VolumeRender.actor_stl_list.append(actor)
-                        except Exception as e:
-                            logger.error(f"重新加载 STL {it.name} 失败: {e}")
+                VolumeRender.actor_stl_list = to_keep
                 renderer.ResetCamera()
                 self.viewModel.VolumeOrthorViewer.widget.Render()
             self.manage_3d_view_priority()
@@ -1585,7 +1601,13 @@ class MenuBarController(MenuBarManager):
         if item and item.color:
             c = QColor(item.color)
             return (c.redF(), c.greenF(), c.blueF())
-        return (1.0, 0.0, 0.0)  # 默认红色
+        return (1.0, 0.0, 0.0)
+
+    def _hex_to_rgb(self, hex_color: str):
+        """hex 颜色字符串转 VTK (r, g, b) 元组，范围 0-1"""
+        from PyQt5.QtGui import QColor
+        c = QColor(hex_color)
+        return (c.redF(), c.greenF(), c.blueF())
 
     def on_item_activated(self, name: str, data_type: str, path: str):
         """
@@ -1604,8 +1626,16 @@ class MenuBarController(MenuBarManager):
                 return  # 已是当前底图，无需重复加载
             logger.info(f"切换原始图像: {name} → {path}")
             try:
-                # 根据格式走对应加载路径
-                item = get_data_manager().get_item(name)
+                # ── 切换前：清除所有分割图层并取消复选框 ──────────────────────
+                dm = get_data_manager()
+                for seg_item in dm.seg_items():
+                    # 取消复选框（更新模型，UI 会自动同步）
+                    dm.set_visible(seg_item.name, False)
+                # 从渲染器移除所有分割 actor，清空字典（下次点击时重新叠加）
+                self.menuBarService.clear_all_seg_layers()
+
+                # ── 加载新底图 ─────────────────────────────────────────────────
+                item = dm.get_item(name)
                 fmt = item.fmt if item else ''
                 if fmt == 'DICOM' or os.path.isdir(path):
                     self._current_loading_path = path
@@ -1619,7 +1649,6 @@ class MenuBarController(MenuBarManager):
                         on_error=lambda msg: None
                     )
                 else:
-                    # NII 作为原始图像（无底图时）
                     self.menuBarService.on_actionAdd_NIFIT_Data(path, item_name=name)
                     self.restore_zoom_interaction()
                     self.active_raw_name = name
@@ -1645,10 +1674,23 @@ class MenuBarController(MenuBarManager):
     def on_item_visibility_changed(self, name: str, data_type: str, visible: bool):
         """
         复选框切换：
-        - 勾选：若图层未加载则先叠加，已加载则直接显示/隐藏
-        - 取消：隐藏该图层的 Actor
+        - TYPE_SEG：勾选叠加/取消隐藏
+        - TYPE_3D：通过 DataItem.actor 控制体绘制窗口中该模型的显示/隐藏
         """
-        from src.model.DataManagerModel import TYPE_SEG, get_data_manager
+        from src.model.DataManagerModel import TYPE_SEG, TYPE_3D, get_data_manager
+
+        if data_type == TYPE_3D:
+            item = get_data_manager().get_item(name)
+            actor = item.actor if item else None
+            if actor:
+                actor.SetVisibility(1 if visible else 0)
+                try:
+                    self.viewModel.VolumeOrthorViewer.widget.Render()
+                except Exception:
+                    pass
+                logger.info(f"3D模型 '{name}' 可见性 → {visible}")
+            return
+
         if data_type != TYPE_SEG:
             return
 
@@ -1658,7 +1700,6 @@ class MenuBarController(MenuBarManager):
 
         if visible:
             if name not in self.menuBarService.seg_layers:
-                # 图层尚未创建，先叠加
                 logger.info(f"勾选激活分割叠加: {name} → {item.path}")
                 try:
                     self.menuBarService.on_actionAdd_NIFIT_Data(
@@ -1688,6 +1729,23 @@ class MenuBarController(MenuBarManager):
                     pass
         self.menuBarService.refresh_all_views()
         logger.info(f"图层 '{name}' 可见性 → {visible}")
+
+    def on_global_3d_color_changed(self, hex_color: str):
+        """全局颜色按钮回调：统一更新所有 STL actor 颜色并刷新体绘制窗口"""
+        from src.model.DataManagerModel import TYPE_3D, get_data_manager
+        from PyQt5.QtGui import QColor
+        qc = QColor(hex_color)
+        r, g, b = qc.redF(), qc.greenF(), qc.blueF()
+        for item in get_data_manager().items_3d():
+            actor = item.actor
+            if actor:
+                actor.GetProperty().SetColor(r, g, b)
+                actor.GetProperty().Modified()
+        try:
+            self.viewModel.VolumeOrthorViewer.widget.Render()
+        except Exception:
+            pass
+        logger.info(f"三维数据全局颜色更新 → {hex_color}")
 
     def on_item_color_changed(self, name: str, data_type: str, color: str):
         """
@@ -1725,22 +1783,18 @@ class MenuBarController(MenuBarManager):
                 logger.info(f"分割颜色已保存（图层未激活）: {name} → {color}")
 
         elif data_type == TYPE_3D:
-            renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
-            if renderer and hasattr(VolumeRender, 'actor_stl_list'):
-                items_3d = get_data_manager().items_3d()
-                for idx, it in enumerate(items_3d):
-                    if it.name == name and idx < len(VolumeRender.actor_stl_list):
-                        actor = VolumeRender.actor_stl_list[idx]
-                        actor.GetProperty().SetColor(r, g, b)
-                        actor.GetProperty().Modified()
-                        break
+            item = get_data_manager().get_item(name)
+            actor = item.actor if item else None
+            if actor:
+                actor.GetProperty().SetColor(r, g, b)
+                actor.GetProperty().Modified()
                 try:
                     self.viewModel.VolumeOrthorViewer.widget.Render()
                 except Exception:
                     pass
                 logger.info(f"3D模型颜色更新: {name} → {color}")
             else:
-                logger.warning(f"renderer 或 actor_stl_list 未就绪，无法更新3D颜色: {name}")
+                logger.warning(f"DataItem.actor 未就绪，无法更新3D颜色: {name}")
 
     def on_action_add_data(self):
         """统一加载数据入口 - 仿 3D Slicer Add Data 对话框"""
@@ -1757,15 +1811,32 @@ class MenuBarController(MenuBarManager):
 
         data_manager = get_data_manager()
 
-        # 将任务分为两组：原始图像优先，分割/三维数据其次
-        # 原始图像（DICOM/NPY/原始NII）必须先加载完，再加载分割叠加
-        raw_tasks = []   # (path, fmt, data_type, name)
-        seg_tasks = []   # (path, fmt, data_type, name)
+        # 已加载的路径集合，用于去重
+        existing_paths = {item.path for item in data_manager.all_items()}
+        existing_names = {item.name for item in data_manager.all_items()}
+
+        raw_tasks = []
+        seg_tasks = []
+        skipped = []
 
         for path, fmt, data_type in selected:
             is_dir = path.endswith('/')
             real_path = path.rstrip('/')
             name = os.path.basename(real_path) or os.path.basename(os.path.dirname(real_path))
+
+            # 路径完全相同 → 跳过
+            if real_path in existing_paths:
+                skipped.append(name)
+                continue
+
+            # 同名但路径不同 → 加后缀区分
+            if name in existing_names:
+                base, ext = os.path.splitext(name)
+                i = 2
+                while f'{base}_{i}{ext}' in existing_names:
+                    i += 1
+                name = f'{base}_{i}{ext}'
+            existing_names.add(name)
 
             if fmt == 'STL' or data_type == TYPE_3D:
                 seg_tasks.append((real_path, fmt, data_type, name, is_dir))
@@ -1773,6 +1844,12 @@ class MenuBarController(MenuBarManager):
                 seg_tasks.append((real_path, fmt, data_type, name, is_dir))
             else:
                 raw_tasks.append((real_path, fmt, data_type, name, is_dir))
+
+        if skipped:
+            QtWidgets.QMessageBox.information(
+                self.QMainWindow, '跳过重复文件',
+                f'以下文件已加载，已自动跳过：\n' + '\n'.join(skipped)
+            )
 
         # 构建串行执行队列：raw_tasks 全部完成后再执行 seg_tasks
         all_tasks = raw_tasks + seg_tasks
@@ -1853,18 +1930,22 @@ class MenuBarController(MenuBarManager):
                 elif fmt == 'STL':
                     from src.model.VolumeRenderModel import VolumeRender
                     renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
+                    # 先创建 DataItem 以获取自动分配的颜色
+                    new_item = DataItem(name=name, data_type=data_type, fmt='STL', path=real_path)
+                    color_rgb = self._hex_to_rgb(new_item.color)
                     if renderer:
-                        yellow = (223/255.0, 196/255.0, 45/255.0)
-                        actor = self.LoadSTL(real_path, color=yellow)
+                        actor = self.LoadSTL(real_path, color=color_rgb)
+                        new_item.actor = actor          # actor 存入 DataItem
                         renderer.AddActor(actor)
                         if not hasattr(VolumeRender, 'actor_stl_list'):
                             VolumeRender.actor_stl_list = []
                         VolumeRender.actor_stl_list.append(actor)
                         renderer.ResetCamera()
                         self.viewModel.VolumeOrthorViewer.widget.Render()
-                    data_manager.add_item(DataItem(name=name, data_type=data_type, fmt='STL', path=real_path))
-                    logger.info(f"已加载: {name} [STL]")
-                    _run_next()  # STL 同步，直接继续
+                    data_manager.add_item(new_item)
+                    self.manage_3d_view_priority()
+                    logger.info(f"已加载: {name} [STL] color={new_item.color}")
+                    _run_next()
 
             except Exception as e:
                 logger.error(f"加载 {real_path} 失败: {e}", exc_info=True)

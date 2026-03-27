@@ -305,7 +305,7 @@ class DataItemRow(QWidget):
 class SectionHeader(QWidget):
     toggled = pyqtSignal(bool)
 
-    def __init__(self, title: str, parent=None):
+    def __init__(self, title: str, extra_widget=None, parent=None):
         super().__init__(parent)
         self.setFixedHeight(32)
         self._expanded = True
@@ -331,13 +331,20 @@ class SectionHeader(QWidget):
         )
         layout.addWidget(lbl, 1)
 
+        if extra_widget is not None:
+            layout.addWidget(extra_widget)
+
         self.bubble = CountBubble()
         layout.addWidget(self.bubble)
 
     def set_count(self, n: int):
         self.bubble.set_count(n)
 
-    def mousePressEvent(self, _):
+    def mousePressEvent(self, e):
+        # 如果点击的是子控件（如按钮），不触发折叠
+        if self.childAt(e.pos()) is not None:
+            super().mousePressEvent(e)
+            return
         self._expanded = not self._expanded
         self.arrow.setText('▾' if self._expanded else '▸')
         self.toggled.emit(self._expanded)
@@ -444,6 +451,8 @@ class DataManagerPanel(QWidget):
     item_deleted = pyqtSignal(str, int)
     # 颜色变更：(item_name, data_type, hex_color)
     color_changed = pyqtSignal(str, int, str)
+    # 三维数据全局颜色变更：(hex_color,)
+    global_3d_color_changed = pyqtSignal(str)
 
     def __init__(self, model: DataManagerModel, parent=None):
         super().__init__(parent)
@@ -528,7 +537,20 @@ class DataManagerPanel(QWidget):
 
         self._sec_raw, self._body_raw = self._make_section('原始图像')
         self._sec_seg, self._body_seg = self._make_section('分割图像')
-        self._sec_3d,  self._body_3d  = self._make_section('三维数据')
+
+        # 三维数据分组：标题栏带全局颜色按钮
+        self._btn_3d_global_color = QPushButton('🎨')
+        self._btn_3d_global_color.setFixedSize(22, 22)
+        self._btn_3d_global_color.setToolTip('更改所有三维数据颜色')
+        self._btn_3d_global_color.setStyleSheet(f'''
+            QPushButton {{
+                background: transparent; border: 1px solid {_BORDER};
+                color: {_TEXT_SEC}; font-size: 12px; border-radius: 4px;
+            }}
+            QPushButton:hover {{ background: {_HOVER}; color: {_WHITE}; border-color: #555; }}
+        ''')
+        self._btn_3d_global_color.clicked.connect(self._on_global_3d_color)
+        self._sec_3d, self._body_3d = self._make_section('三维数据', self._btn_3d_global_color)
 
         scroll.setWidget(self._tree_widget)
         lc_layout.addWidget(scroll)
@@ -543,8 +565,8 @@ class DataManagerPanel(QWidget):
         self.model.item_removed.connect(self.item_deleted)
         self.model.color_changed.connect(self._on_model_color_changed)
 
-    def _make_section(self, title: str):
-        hdr = SectionHeader(title)
+    def _make_section(self, title: str, extra_widget=None):
+        hdr = SectionHeader(title, extra_widget=extra_widget)
         body = QWidget()
         body.setStyleSheet('background: transparent;')
         bl = QVBoxLayout(body)
@@ -645,6 +667,27 @@ class DataManagerPanel(QWidget):
     def _collapse_all(self):
         for b in (self._body_raw, self._body_seg, self._body_3d):
             b.setVisible(False)
+
+    def _on_global_3d_color(self):
+        """全局颜色按钮：统一更改所有三维数据的颜色"""
+        from PyQt5.QtWidgets import QApplication, QColorDialog
+        from PyQt5.QtGui import QColor
+        app = QApplication.instance()
+        saved = app.styleSheet()
+        app.setStyleSheet('')
+        color = QColorDialog.getColor(QColor('#dfC42d'), None, '选择三维数据全局颜色')
+        app.setStyleSheet(saved)
+        if not color.isValid():
+            return
+        hex_color = color.name()
+        # 更新所有 3D DataItem 的颜色
+        for item in self.model.items_3d():
+            self.model.set_color(item.name, hex_color)
+            # 刷新行内颜色圆点
+            if item.name in self._row_widgets:
+                self._row_widgets[item.name].dot.set_color(hex_color)
+        # 发出全局颜色信号，由 Controller 统一更新 VTK actor
+        self.global_3d_color_changed.emit(hex_color)
 
     def _delete_selected(self):
         """删除所有复选框勾选的数据项"""
