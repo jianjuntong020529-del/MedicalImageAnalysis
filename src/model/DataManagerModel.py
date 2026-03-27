@@ -51,7 +51,10 @@ class DataItem:
     path: str = ''
     color: str = field(default_factory=_next_color)
     visible: bool = True
-    dim: str = '—'
+    dim: str = '—'          # 矩阵尺寸，如 512×512×200
+    spacing: str = '—'      # 体素间距，如 0.50×0.50×1.00 mm
+    patient_name: str = '—' # 患者姓名（DICOM 特有）
+    filename: str = '—'     # 原始文件名/文件夹名
     # vtk actor 引用（3D模型用）
     actor: object = None
     # vtk mapper/reader 引用（切片视图用）

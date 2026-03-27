@@ -199,9 +199,11 @@ class MenuBarController(MenuBarManager):
             self.baseModelClass.update_data_information()
             ParamConstant.ANNOTATION_SUBJECT_NAME = self._current_loading_path.split('/')[-1]
             self.menuBarService.on_actionAdd_DICOM_Data()
-            # 记录当前激活的原始图像（用文件夹名作为 key）
             self.active_raw_name = os.path.basename(self._current_loading_path.rstrip('/'))
             self.manage_3d_view_priority()
+
+            # 提取元数据供 DataItem 使用
+            self._last_dicom_meta = self._extract_dicom_meta(self._current_loading_path)
             logger.info("DICOM 数据处理完成")
         except Exception as e:
             logger.error(f"处理 DICOM 数据时出错: {e}", exc_info=True)
@@ -209,6 +211,26 @@ class MenuBarController(MenuBarManager):
                 self.QMainWindow, "数据处理错误",
                 f"加载成功但处理数据时出错：\n{str(e)}"
             )
+
+    def _extract_dicom_meta(self, dicom_path: str) -> dict:
+        """从 DICOM 目录提取 patient_name / dim / spacing"""
+        meta = {'patient_name': '—', 'dim': '—', 'spacing': '—', 'filename': os.path.basename(dicom_path.rstrip('/'))}
+        try:
+            dcm_files = glob.glob(os.path.join(dicom_path, '*.dcm'))
+            if dcm_files:
+                ds = pydicom.dcmread(dcm_files[0], stop_before_pixels=True)
+                raw_name = str(getattr(ds, 'PatientName', '—'))
+                meta['patient_name'] = raw_name if raw_name else '—'
+        except Exception:
+            pass
+        try:
+            dims = self.baseModelClass.imageDimensions
+            sp   = self.baseModelClass.spacing
+            meta['dim']     = f'{dims[0]}×{dims[1]}×{dims[2]}'
+            meta['spacing'] = f'{sp[0]:.2f}×{sp[1]:.2f}×{sp[2]:.2f} mm'
+        except Exception:
+            pass
+        return meta
     
     def _on_dicom_loaded_error(self, error_msg):
         """DICOM 加载失败回调"""
@@ -443,175 +465,175 @@ class MenuBarController(MenuBarManager):
         logger.info(f"开始加载 NPY 文件: {npy_path}")
         self._load_npy_with_conversion(npy_path)
     
-    def _load_npy_with_conversion(self, npy_path):
+    def _load_npy_with_conversion(self, npy_path, on_done=None):
         """
-        加载 NPY 并转换为 DICOM（带动画）
-        由于 NPY 需要转换步骤，这里使用自定义流程
+        加载 NPY 并转换为 DICOM。
+        on_done: 可选回调，转换完成后调用 on_done(meta)；
+                 若为 None 则调用默认的 _on_npy_loaded_success。
+        当通过对话框路径调用时（on_done 不为 None），使用 LoadingIndicator 显示进度；
+        当通过菜单栏直接调用时，使用旧的 overlay 方式（若可用）。
         """
-        from src.widgets.LoadingAnimationWidget import LoadingOverlay
         from PyQt5.QtCore import QThread, pyqtSignal
-        
+
         # 创建自定义工作线程（包含转换步骤）
         class NPYConversionWorker(QThread):
             progress = pyqtSignal(int, str)
             finished = pyqtSignal(dict)
             error = pyqtSignal(str)
-            
+
             def __init__(self, npy_path, temp_path, final_path):
                 super().__init__()
                 self.npy_path = npy_path
                 self.temp_path = temp_path
                 self.final_path = final_path
                 self._cancelled = False
-            
+
             def cancel(self):
                 self._cancelled = True
-            
+
             def run(self):
                 try:
-                    # 步骤 1: 加载 NPY
                     self.progress.emit(10, 'np.load() 执行中...')
                     npy_data = np.load(self.npy_path, allow_pickle=False)
                     logger.info(f"NPY 文件加载成功: shape={npy_data.shape}, dtype={npy_data.dtype}")
-                    
                     if self._cancelled:
                         return
-                    
-                    # 步骤 2: 验证数据
+
                     self.progress.emit(30, '验证数据格式...')
                     if len(npy_data.shape) != 3:
                         raise ValueError(f"数据格式错误，期望 3D 数组，实际为 {len(npy_data.shape)}D")
-                    
                     if npy_data.size == 0:
                         raise ValueError("NPY 文件不包含数据")
-                    
                     if self._cancelled:
                         return
-                    
-                    # 步骤 3: 转换为 DICOM
+
                     self.progress.emit(50, '转换为 DICOM 格式...')
-                    
                     conversion_params = DICOMConversionParams(
-                        pixel_spacing=(1.0, 1.0),
-                        slice_thickness=1.0,
-                        patient_name="NPY_PATIENT",
-                        study_description="NPY Data Import",
+                        pixel_spacing=(1.0, 1.0), slice_thickness=1.0,
+                        patient_name="NPY_PATIENT", study_description="NPY Data Import",
                         data_type="NPY"
                     )
                     converter = NPYToDICOMConverter(conversion_params)
-                    dicom_files = converter.convert(npy_data, self.temp_path)
-                    logger.info(f"成功转换为 {len(dicom_files)} 个 DICOM 文件")
-                    
+                    converter.convert(npy_data, self.temp_path)
                     if self._cancelled:
                         return
-                    
-                    # 步骤 4: 处理 DICOM 文件
+
                     self.progress.emit(75, '处理 DICOM 文件...')
-                    dicom_files = glob.glob(self.temp_path + "*.dcm")
-                    dicom_files.sort()
-                    
+                    dicom_files = sorted(glob.glob(self.temp_path + "*.dcm"))
                     slice_thickness = 1.0
-                    for index, dicom_file_path in enumerate(dicom_files):
-                        dicom_file = pydicom.dcmread(dicom_file_path)
-                        convertNsave(dicom_file, ParamConstant.IMAGE_DCM, self.final_path, index)
-                        slice_thickness = dicom_file.SliceThickness
-                    
+                    for index, dcm_path in enumerate(dicom_files):
+                        dcm = pydicom.dcmread(dcm_path)
+                        convertNsave(dcm, ParamConstant.IMAGE_DCM, self.final_path, index)
+                        slice_thickness = dcm.SliceThickness
                     if self._cancelled:
                         return
-                    
-                    # 完成
+
                     self.progress.emit(100, '完成')
-                    
-                    meta = {
+                    self.finished.emit({
                         '格式': 'NPY',
                         '维度': str(npy_data.shape),
                         '数据类型': str(npy_data.dtype),
                         '路径': self.npy_path,
                         'slice_thickness': slice_thickness,
-                        'dicom_path': self.final_path
-                    }
-                    
-                    self.finished.emit(meta)
-                    
+                        'dicom_path': self.final_path,
+                    })
                 except Exception as e:
                     logger.error(f"NPY 转换失败: {e}", exc_info=True)
                     self.error.emit(str(e))
-        
-        # 创建遮罩
+
         filename = os.path.basename(npy_path)
-        self._overlay = LoadingOverlay(self.QMainWindow.centralWidget(), 'NPY', filename)
-        self._overlay.set_steps([])  # NPY 不显示步骤列表
-        self._overlay.show_over(self.QMainWindow.centralWidget())
-        self._overlay.cancelled.connect(self._on_npy_cancel)
-        
-        # 创建并启动工作线程
+
+        # 通过对话框路径（on_done 不为 None）：用 LoadingIndicator 显示进度
+        if on_done is not None:
+            self._overlay = None
+            self.loading_helper.loading_indicator.start_loading('NPY', filename)
+
+            self._npy_worker = NPYConversionWorker(
+                npy_path, self.save_npypath_temp, self.save_npypath)
+            self._npy_worker.progress.connect(
+                lambda pct, _: self.loading_helper.loading_indicator.update_progress(pct))
+            self._npy_worker.finished.connect(on_done)
+            self._npy_worker.finished.connect(
+                lambda _: self.loading_helper.loading_indicator.finish_success())
+            self._npy_worker.error.connect(self._on_npy_loaded_error)
+            self._npy_worker.start()
+            return
+
+        # 菜单栏直接调用路径：尝试使用 overlay，不可用则降级到 LoadingIndicator
+        try:
+            from src.widgets.LoadingAnimationWidget import LoadingOverlay
+            self._overlay = LoadingOverlay(self.QMainWindow.centralWidget(), 'NPY', filename)
+            self._overlay.set_steps([])
+            self._overlay.show_over(self.QMainWindow.centralWidget())
+            self._overlay.cancelled.connect(self._on_npy_cancel)
+            progress_slot = self._overlay.update_progress
+        except (ImportError, AttributeError):
+            self._overlay = None
+            self.loading_helper.loading_indicator.start_loading('NPY', filename)
+            progress_slot = lambda pct, _: self.loading_helper.loading_indicator.update_progress(pct)
+
         self._npy_worker = NPYConversionWorker(
-            npy_path,
-            self.save_npypath_temp,
-            self.save_npypath
-        )
-        self._npy_worker.progress.connect(self._overlay.update_progress)
-        self._npy_worker.finished.connect(self._on_npy_loaded_success)
+            npy_path, self.save_npypath_temp, self.save_npypath)
+        self._npy_worker.progress.connect(progress_slot)
+        self._npy_worker.finished.connect(
+            lambda meta: self._on_npy_loaded_success(None, meta))
         self._npy_worker.error.connect(self._on_npy_loaded_error)
         self._npy_worker.start()
     
-    def _on_npy_loaded_success(self, meta):
-        """NPY 加载成功回调"""
+    def _on_npy_loaded_success(self, data, meta):
+        """NPY 加载成功回调（兼容 LoadingAnimationHelper 和旧 NPYConversionWorker 两条路径）"""
         try:
-            # 使用淡出动画隐藏遮罩
-            if self._overlay:
-                self._overlay.fade_out_and_close()
+            # 旧路径（on_actionAdd_NPY_Data）才有 _overlay，安全检查
+            overlay = getattr(self, '_overlay', None)
+            if overlay:
+                overlay.fade_out_and_close()
                 self._overlay = None
-            
+
             logger.info(f"NPY 数据加载成功: {meta}")
-            
-            # 设置数据类型
+
+            # 判断是哪条路径：LoadingAnimationHelper 路径 meta 里没有 dicom_path
+            dicom_path = meta.get('dicom_path')
+            if dicom_path is None:
+                # LoadingAnimationHelper 路径：NPY 直接加载，需要走转换流程
+                # 此时 data 是 numpy array，需要先转换为 DICOM
+                npy_path = meta.get('路径', '')
+                logger.info(f"LoadingAnimationHelper 路径，启动 NPY→DICOM 转换: {npy_path}")
+                self._load_npy_with_conversion(npy_path)
+                return
+
             DataAndModelType.DATA_TYPE = 'NPY'
-            
-            # 更新路径
-            setDirPath(meta['dicom_path'])
-            
-            # 更新 reader
-            self.reader.SetDirectoryName(meta['dicom_path'])
+            setDirPath(dicom_path)
+            self.reader.SetDirectoryName(dicom_path)
             self.reader.Update()
             self.baseModelClass.imageReader = self.reader
             self.baseModelClass.update_data_information()
-            
-            # 调用服务层方法
             self.menuBarService.on_actionAdd_NPY_Data(meta['slice_thickness'])
-            # 记录当前激活的原始图像
             self.active_raw_name = os.path.basename(meta["路径"])
             self.manage_3d_view_priority()
-            
-            # 显示成功消息
+
             if self.QMainWindow.statusBar():
                 self.QMainWindow.statusBar().showMessage(
                     f'✓  {os.path.basename(meta["路径"])} 加载完成   {meta["维度"]}',
                     4000
                 )
-            
             logger.info("NPY 数据处理完成")
-            
+
         except Exception as e:
             logger.error(f"处理 NPY 数据时出错: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(
-                self.QMainWindow,
-                "数据处理错误",
+                self.QMainWindow, "数据处理错误",
                 f"加载成功但处理数据时出错：\n{str(e)}"
             )
     
     def _on_npy_loaded_error(self, error_msg):
         """NPY 加载失败回调"""
-        # 使用淡出动画隐藏遮罩
-        if self._overlay:
-            self._overlay.fade_out_and_close()
+        overlay = getattr(self, '_overlay', None)
+        if overlay:
+            overlay.fade_out_and_close()
             self._overlay = None
-        
         logger.error(f"NPY 加载失败: {error_msg}")
-        
         QtWidgets.QMessageBox.critical(
-            self.QMainWindow,
-            '加载失败',
+            self.QMainWindow, '加载失败',
             f'NPY 文件读取出错：\n{error_msg}'
         )
     
@@ -1874,7 +1896,14 @@ class MenuBarController(MenuBarManager):
 
                     def _dicom_ok(data, meta, _n=dicom_name, _p=dicom_path, _dt=data_type):
                         self._on_dicom_loaded_success(data, meta)
-                        data_manager.add_item(DataItem(name=_n, data_type=_dt, fmt='DICOM', path=_p))
+                        m = getattr(self, '_last_dicom_meta', {})
+                        data_manager.add_item(DataItem(
+                            name=_n, data_type=_dt, fmt='DICOM', path=_p,
+                            filename=m.get('filename', _n),
+                            patient_name=m.get('patient_name', '—'),
+                            dim=m.get('dim', '—'),
+                            spacing=m.get('spacing', '—'),
+                        ))
                         _run_next()
 
                     self.loading_helper.start_loading(
@@ -1889,8 +1918,20 @@ class MenuBarController(MenuBarManager):
                             self._on_nifti_loaded_success(data, meta)
                         else:
                             logger.info(f"分割文件 {_n} 已加载，等待用户点击激活叠加")
+                        # 从 meta 提取 dim / spacing
+                        _dim = '—'; _sp = '—'
+                        try:
+                            sp = meta.get('体素间距', '')
+                            if sp:
+                                parts = sp.replace(' mm', '').split(' × ')
+                                _sp = '×'.join(f'{float(p):.2f}' for p in parts) + ' mm'
+                            _dim = f"{meta.get('尺寸', '—')}×{meta.get('层数', '—')}"
+                        except Exception:
+                            pass
                         data_manager.add_item(DataItem(
                             name=_n, data_type=_dt, fmt='NII', path=_p,
+                            filename=os.path.basename(_p),
+                            dim=_dim, spacing=_sp,
                             visible=False
                         ))
                         _run_next()
@@ -1917,9 +1958,25 @@ class MenuBarController(MenuBarManager):
                                     pass
 
                     def _npy_ok(data, meta, _n=name, _p=real_path, _dt=data_type):
-                        self._on_npy_loaded_success(data, meta)
-                        data_manager.add_item(DataItem(name=_n, data_type=_dt, fmt='NPY', path=_p))
-                        _run_next()
+                        # LoadingAnimationHelper 只做了 np.load，还需要走 NPY→DICOM 转换
+                        # 把 add_item 和 _run_next 注入到转换完成后的回调里
+                        _dim = meta.get('维度', '—')
+
+                        orig_success = getattr(self, '_npy_worker_on_success', None)
+
+                        def _after_convert(convert_meta):
+                            # 转换完成，更新视图
+                            self._on_npy_loaded_success(None, convert_meta)
+                            data_manager.add_item(DataItem(
+                                name=_n, data_type=_dt, fmt='NPY', path=_p,
+                                filename=os.path.basename(_p),
+                                dim=str(_dim),
+                            ))
+                            _run_next()
+
+                        # 直接启动转换流程，跳过 LoadingAnimationHelper 的二次加载
+                        self._clear_ui_state_for_new_data()
+                        self._load_npy_with_conversion(_p, on_done=_after_convert)
 
                     self.loading_helper.start_loading(
                         path=real_path, fmt='NPY',
@@ -1931,7 +1988,10 @@ class MenuBarController(MenuBarManager):
                     from src.model.VolumeRenderModel import VolumeRender
                     renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
                     # 先创建 DataItem 以获取自动分配的颜色
-                    new_item = DataItem(name=name, data_type=data_type, fmt='STL', path=real_path)
+                    new_item = DataItem(
+                        name=name, data_type=data_type, fmt='STL', path=real_path,
+                        filename=os.path.basename(real_path),
+                    )
                     color_rgb = self._hex_to_rgb(new_item.color)
                     if renderer:
                         actor = self.LoadSTL(real_path, color=color_rgb)

@@ -359,7 +359,10 @@ class SectionHeader(QWidget):
 # ── 属性面板 ──────────────────────────────────────────────────────────────────
 
 class PropertiesPanel(QFrame):
-    _DEFAULT = [('名称', ''), ('类型', ''), ('格式', ''), ('尺寸', '')]
+    _DEFAULT = [
+        ('文件名', ''), ('患者姓名', ''), ('数据类型', ''),
+        ('格式', ''), ('矩阵尺寸', ''), ('体素间距', ''),
+    ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -368,10 +371,11 @@ class PropertiesPanel(QFrame):
             f'border: 1px solid {_BORDER}; }}'
         )
         _drop_shadow(self, blur=12, dy=2, alpha=50)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 12)
-        layout.setSpacing(8)
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(10, 8, 10, 8)
+        self._root.setSpacing(0)
 
         hdr = QHBoxLayout()
         t = QLabel('属性')
@@ -382,53 +386,83 @@ class PropertiesPanel(QFrame):
         )
         hdr.addWidget(t)
         hdr.addStretch()
-        layout.addLayout(hdr)
+        self._root.addLayout(hdr)
 
-        self.table = QTableWidget(len(self._DEFAULT), 2)
-        self.table.horizontalHeader().hide()
-        self.table.verticalHeader().hide()
-        self.table.setShowGrid(False)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setFocusPolicy(Qt.NoFocus)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setStyleSheet(_TABLE_STYLE)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        layout.addWidget(self.table)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f'background: {_BORDER}; border: none; margin-bottom: 4px;')
+        self._root.addWidget(sep)
+
+        # 行容器
+        self._rows_widget = QWidget()
+        self._rows_widget.setStyleSheet('background: transparent;')
+        self._rows_layout = QVBoxLayout(self._rows_widget)
+        self._rows_layout.setContentsMargins(0, 2, 0, 0)
+        self._rows_layout.setSpacing(0)
+        self._root.addWidget(self._rows_widget)
 
         self.clear()
 
     def _set_rows(self, rows: list):
-        self.table.setRowCount(len(rows))
-        f_key = QFont(_FONT.split(',')[0].strip('"'), 11)
-        f_val = QFont(_FONT.split(',')[0].strip('"'), 11)
-        f_val.setBold(True)
+        # 清空旧行
+        lo = self._rows_layout
+        while lo.count():
+            item = lo.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        _key_style = (
+            f'font-size: 10px; color: {_TEXT_SEC}; font-family: {_FONT};'
+            f'background: transparent; border: none;'
+        )
+        _val_style_filled = (
+            f'font-size: 10px; font-weight: 700; color: {_WHITE};'
+            f'font-family: {_FONT}; background: transparent; border: none;'
+        )
+        _val_style_empty = (
+            f'font-size: 10px; font-weight: 700; color: {_TEXT_HINT};'
+            f'font-family: {_FONT}; background: transparent; border: none;'
+        )
+
         for i, (k, v) in enumerate(rows):
-            ki = QTableWidgetItem(k)
-            ki.setForeground(QColor(_TEXT_SEC))
-            ki.setFont(f_key)
-            vi = QTableWidgetItem(str(v) if v else '—')
-            vi.setForeground(QColor(_WHITE if v else _TEXT_HINT))
-            vi.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            vi.setFont(f_val)
-            self.table.setItem(i, 0, ki)
-            self.table.setItem(i, 1, vi)
-        h = sum(self.table.rowHeight(i) for i in range(len(rows)))
-        self.table.setFixedHeight(max(h + 2, 20))
+            row = QWidget()
+            row.setFixedHeight(22)
+            row.setStyleSheet(
+                f'background: {"#2a2a2a" if i % 2 == 0 else "transparent"};'
+                f'border-radius: 3px;'
+            )
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(4, 0, 4, 0)
+            rl.setSpacing(4)
+
+            key_lbl = QLabel(k)
+            key_lbl.setStyleSheet(_key_style)
+            key_lbl.setFixedWidth(54)
+
+            val_str = str(v) if v and v != '—' else '—'
+            val_lbl = QLabel(val_str)
+            val_lbl.setStyleSheet(_val_style_filled if (v and v != '—') else _val_style_empty)
+            val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            val_lbl.setWordWrap(False)
+            # 超长文本截断显示，鼠标悬停显示完整内容
+            val_lbl.setToolTip(val_str)
+
+            rl.addWidget(key_lbl)
+            rl.addWidget(val_lbl, 1)
+            lo.addWidget(row)
 
     def update_item(self, item: DataItem, seg_items=None):
-        import os
-        tm = {TYPE_RAW: '原始图像', TYPE_SEG: '分割图像', TYPE_3D: '三维数据'}
+        tm = {TYPE_RAW: 'Volume', TYPE_SEG: 'Segmentation', TYPE_3D: 'Model'}
         rows = [
-            ('名称', item.name),
-            ('类型', tm.get(item.data_type, '—')),
-            ('格式', item.fmt),
-            ('尺寸', item.dim),
+            ('文件名',   item.filename),
+            ('患者姓名', item.patient_name),
+            ('数据类型', tm.get(item.data_type, '—')),
+            ('格式',     item.fmt),
+            ('矩阵尺寸', item.dim),
+            ('体素间距', item.spacing),
         ]
-        if item.path:
-            rows.append(('路径', os.path.basename(item.path)))
         if item.data_type == TYPE_RAW and seg_items:
             rows.append(('叠加分割', ', '.join(s.name for s in seg_items)))
         elif item.data_type == TYPE_3D:
