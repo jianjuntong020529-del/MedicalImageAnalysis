@@ -33,6 +33,7 @@ class Generate_Panormaic_Widget(QWidget):
         self.dimensions = self.baseModelClass.imageDimensions
 
         self.resize(1128, 698)
+        self.setStyleSheet('background-color: #1e1e1e;')
 
         # ----------------系统整体布局-------------------------------------------------------------------
         self.system_layout = QtWidgets.QGridLayout(self)
@@ -98,83 +99,147 @@ class Generate_Panormaic_Widget(QWidget):
         self.tool_bar_layout.setSpacing(APPVisualStyle.LAYOUT_SPACING)
         self.tool_bar_layout.setObjectName("tool_bar_layout")
 
+        # ── 深色主题设计 Token ──────────────────────────────────────────────────
+        _CARD   = '#2d2d2d'
+        _BORDER = '#3a3a3a'
+        _HOVER  = '#383838'
+        _ACCENT = '#3b82f6'
+        _TEXT   = '#e8e8e8'
+        _SEC    = '#9ca3af'
+        _WHITE  = '#ffffff'
+        _FONT   = '"Microsoft YaHei", "PingFang SC", sans-serif'
+
+        _BTN_PRIMARY = f'''
+            QPushButton {{
+                background: {_ACCENT}; color: {_WHITE}; border: none;
+                border-radius: 5px; padding: 6px 12px;
+                font-size: 12px; font-weight: 600; font-family: {_FONT};
+            }}
+            QPushButton:hover {{ background: #2563eb; }}
+            QPushButton:pressed {{ background: #1d4ed8; }}
+            QPushButton:checked {{ background: #1d4ed8; border: 1px solid #60a5fa; }}
+        '''
+        _BTN_SECONDARY = f'''
+            QPushButton {{
+                background: #333; color: {_TEXT}; border: 1px solid {_BORDER};
+                border-radius: 5px; padding: 6px 12px;
+                font-size: 12px; font-family: {_FONT};
+            }}
+            QPushButton:hover {{ background: {_HOVER}; color: {_WHITE}; }}
+            QPushButton:pressed {{ background: #444; }}
+            QPushButton:checked {{ background: #1d4ed8; border-color: {_ACCENT}; color: {_WHITE}; }}
+        '''
+        _INPUT_STYLE = f'''
+            QLineEdit {{
+                background: #333; color: {_TEXT}; border: 1px solid {_BORDER};
+                border-radius: 4px; padding: 4px 8px;
+                font-size: 12px; font-family: {_FONT};
+            }}
+            QLineEdit:focus {{ border-color: {_ACCENT}; }}
+        '''
+        _LABEL_KEY = (
+            f'font-size: 11px; color: {_SEC}; font-family: {_FONT};'
+            f'background: transparent; border: none;'
+        )
+
         self.widget_tool = QtWidgets.QWidget()
-        self.widget_tool.setMinimumSize(QtCore.QSize(350, 300))
+        self.widget_tool.setMinimumSize(QtCore.QSize(220, 200))
         self.widget_tool.setMaximumSize(QtCore.QSize(400, 400))
         self.widget_tool.setObjectName("widget_tool")
-        self.widget_tool.setStyleSheet(APPVisualStyle.WIDGET_BACKGROUND_COLOR)
+        self.widget_tool.setStyleSheet(
+            f'background: {_CARD}; border-radius: 8px; border: 1px solid {_BORDER};'
+        )
+
+        # 阴影
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QColor as _QColor
+        eff = QGraphicsDropShadowEffect(self.widget_tool)
+        eff.setBlurRadius(12); eff.setOffset(0, 2)
+        eff.setColor(_QColor(0, 0, 0, 60))
+        self.widget_tool.setGraphicsEffect(eff)
 
         self.tool_vertical_layout = QtWidgets.QVBoxLayout(self.widget_tool)
-        self.tool_vertical_layout.setContentsMargins(11, 11, 11, 11)
-        self.tool_vertical_layout.setSpacing(APPVisualStyle.LAYOUT_SPACING)
-        self.tool_vertical_layout.setAlignment(QtCore.Qt.AlignVCenter)
+        self.tool_vertical_layout.setContentsMargins(12, 10, 12, 12)
+        self.tool_vertical_layout.setSpacing(8)
+        self.tool_vertical_layout.setAlignment(QtCore.Qt.AlignTop)
         self.tool_vertical_layout.setObjectName("tool_vertical_layout")
 
+        # ── 标题 ──
         self.title_bool = QtWidgets.QLabel(self.widget_tool)
         self.title_bool.setObjectName("title_tool")
-        self.title_bool.setStyleSheet(APPVisualStyle.WIDGET_LABEL_COLOR)
-        self.title_bool.setFont(Font.font2)
+        self.title_bool.setStyleSheet(
+            f'font-size: 11px; font-weight: 700; color: {_WHITE};'
+            f'letter-spacing: 1px; font-family: {_FONT};'
+            f'background: transparent; border: none;'
+        )
         self.tool_vertical_layout.addWidget(self.title_bool)
 
-        # 输入牙弓厚度
-        self.horizontal_layout_input = QtWidgets.QHBoxLayout(self.widget_tool)
+        # 分隔线
+        _sep = QtWidgets.QFrame()
+        _sep.setFrameShape(QtWidgets.QFrame.HLine)
+        _sep.setFixedHeight(1)
+        _sep.setStyleSheet(f'background: {_BORDER}; border: none;')
+        self.tool_vertical_layout.addWidget(_sep)
+
+        # ── 牙弓厚度输入行 ──
+        self.horizontal_layout_input = QtWidgets.QHBoxLayout()
         self.horizontal_layout_input.setObjectName("horizontal_layout_input")
-        self.horizontal_layout_input.setSpacing(APPVisualStyle.LAYOUT_SPACING)
+        self.horizontal_layout_input.setSpacing(8)
 
         self.dental_arch_thickness_label = QtWidgets.QLabel(self.widget_tool)
         self.dental_arch_thickness_label.setObjectName("dental_arch_thickness_label")
-        self.dental_arch_thickness_label.setFont(Font.font)
+        self.dental_arch_thickness_label.setStyleSheet(_LABEL_KEY)
         self.dental_arch_thickness_label.setText(WindowConstant.DENTAL_ARCH_THICKNESS)
 
         self.dental_arch_thickness = QtWidgets.QLineEdit(self.widget_tool)
         self.dental_arch_thickness.setObjectName("dental_arch_thickness")
         self.dental_arch_thickness.setText(ParamConstant.THICKNESS_VALUE)
-        # 创建整数验证器
+        self.dental_arch_thickness.setStyleSheet(_INPUT_STYLE)
         validator = QtGui.QIntValidator()
-        # 将验证器应用于文本框
         self.dental_arch_thickness.setValidator(validator)
         self.dental_arch_thickness.textChanged[str].connect(self.changeThickness)
 
-        self.horizontal_layout_input.addWidget(self.dental_arch_thickness_label, 0, Qt.AlignLeft)
-        self.horizontal_layout_input.addWidget(self.dental_arch_thickness, 1, Qt.AlignLeft)
+        self.horizontal_layout_input.addWidget(self.dental_arch_thickness_label)
+        self.horizontal_layout_input.addWidget(self.dental_arch_thickness, 1)
         self.tool_vertical_layout.addLayout(self.horizontal_layout_input)
 
-        #  标注按钮
+        # ── 标注按钮 ──
         self.pushButton_annotation = QtWidgets.QPushButton(self.widget_tool)
         self.pushButton_annotation.setObjectName("pushButton_annotation")
         self.pushButton_annotation.setCheckable(True)
         self.pushButton_annotation.setAutoExclusive(False)
-        self.pushButton_annotation.setFont(Font.font)
+        self.pushButton_annotation.setStyleSheet(_BTN_PRIMARY)
         self.pushButton_annotation.clicked.connect(self.annotation)
         self.annotation_enable = False
         self.tool_vertical_layout.addWidget(self.pushButton_annotation)
 
-        # 保存按钮
+        # ── 保存按钮 ──
         self.pushButton_save = QtWidgets.QPushButton(self.widget_tool)
         self.pushButton_save.setObjectName("pushButton_save")
         self.pushButton_save.setAutoExclusive(False)
-        self.pushButton_save.setFont(Font.font)
+        self.pushButton_save.setStyleSheet(_BTN_SECONDARY)
         self.pushButton_save.clicked.connect(self.save)
         self.tool_vertical_layout.addWidget(self.pushButton_save)
 
-        # 显示牙弓线按钮
+        # ── 显示牙弓线按钮 ──
         self.pushButton_show = QtWidgets.QPushButton(self.widget_tool)
         self.pushButton_show.setObjectName("pushButton_show")
         self.pushButton_show.setCheckable(True)
         self.pushButton_show.setAutoExclusive(False)
-        self.pushButton_show.setFont(Font.font)
+        self.pushButton_show.setStyleSheet(_BTN_SECONDARY)
         self.pushButton_show.clicked.connect(self.show_dentral_arch_curve)
         self.show_enable = False
         self.tool_vertical_layout.addWidget(self.pushButton_show)
 
-        # 生成口腔全景图
+        # ── 生成口腔全景图按钮 ──
         self.pushButton_generate_dentalPanoramic = QtWidgets.QPushButton(self.widget_tool)
         self.pushButton_generate_dentalPanoramic.setObjectName("pushButton_generate_dentalPanoramic")
-        self.pushButton_generate_dentalPanoramic.setFont(Font.font)
+        self.pushButton_generate_dentalPanoramic.setStyleSheet(_BTN_PRIMARY)
         self.pushButton_generate_dentalPanoramic.clicked.connect(self.generate_dental_panoramic)
         self.tool_vertical_layout.addWidget(self.pushButton_generate_dentalPanoramic)
 
         self.tool_bar_layout.addWidget(self.widget_tool)
+        self.tool_bar_layout.addStretch()
 
         self.system_layout.addLayout(self.tool_bar_layout, 0, 1, 1, 1)
 
