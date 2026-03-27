@@ -170,6 +170,11 @@ class Ui_MainWindow(object):
             self.menuBarController.on_item_color_changed
         )
 
+        # 删除数据 → 从渲染器移除 Actor（行内删除按钮和标题栏删除均走此路径）
+        self.data_manager_panel.item_deleted.connect(
+            self.menuBarController.on_data_item_deleted
+        )
+
         # 对比度调整栏
         self.contrast = ContrastController(self.baseModelClass, self.OrthoViewerModel, self.widget)
         self.tool_bar_layout.addWidget(self.contrast.widget_contrast)

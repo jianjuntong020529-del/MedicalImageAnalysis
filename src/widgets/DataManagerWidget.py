@@ -645,5 +645,10 @@ class DataManagerPanel(QWidget):
             b.setVisible(False)
 
     def _delete_selected(self):
-        if self._selected_name:
-            self._on_row_delete(self._selected_name)
+        """删除所有复选框勾选的数据项"""
+        checked_names = [
+            name for name, row in self._row_widgets.items()
+            if row.chk.isChecked()
+        ]
+        for name in checked_names:
+            self._on_row_delete(name)

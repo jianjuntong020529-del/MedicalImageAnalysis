@@ -1652,13 +1652,7 @@ class MenuBarController(MenuBarManager):
                     viewer_layer.GetImageActor().SetVisibility(1 if visible else 0)
                 except Exception:
                     pass
-        for w_attr in ('vtkWidget_XY', 'vtkWidget_YZ', 'vtkWidget_XZ'):
-            w = getattr(self.menuBarService, w_attr, None)
-            if w:
-                try:
-                    w.GetRenderWindow().Render()
-                except Exception:
-                    pass
+        self.menuBarService.refresh_all_views()
         logger.info(f"图层 '{name}' 可见性 → {visible}")
 
     def on_item_color_changed(self, name: str, data_type: str, color: str):

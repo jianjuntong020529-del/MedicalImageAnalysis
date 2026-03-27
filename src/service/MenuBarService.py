@@ -549,13 +549,20 @@ class MenuBarService:
                     ortho_viewer.viewer.GetRenderer().RemoveActor(actor)
                 except Exception:
                     pass
-        # 刷新
-        for w in (self.vtkWidget_XY, self.vtkWidget_YZ, self.vtkWidget_XZ):
+        self.refresh_all_views()
+        logger.info(f"Segmentation layer '{item_name}' removed.")
+
+    def refresh_all_views(self):
+        """强制刷新三个正交视图的 VTK 窗口。"""
+        for ortho in (
+            self.viewModel.AxialOrthoViewer,
+            self.viewModel.SagittalOrthoViewer,
+            self.viewModel.CoronalOrthoViewer,
+        ):
             try:
-                w.GetRenderWindow().Render()
+                ortho.widget.GetRenderWindow().Render()
             except Exception:
                 pass
-        logger.info(f"Segmentation layer '{item_name}' removed.")
 
 
     def create_dicom_viewer(self, ortho_viewer, vtkWidget, label, verticalSlider, id, slice_index):
