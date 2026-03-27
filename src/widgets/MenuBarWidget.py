@@ -188,6 +188,11 @@ class MenuBarManager:
         self.fileMenu.addAction(self.actionAdd_NIFIT_Data)
         self.fileMenu.addAction(self.actionAdd_NPY_Data)
         self.fileMenu.addAction(self.actionAdd_STL_Data)
+        self.fileMenu.addSeparator()
+        # 统一加载入口
+        self.action_add_data = QtWidgets.QAction(self.QMainWindow)
+        self.action_add_data.setObjectName("action_add_data")
+        self.fileMenu.addAction(self.action_add_data)
 
         self.toolMenu.addAction(self.action_generatePanormaic)
         self.toolMenu.addAction(self.action_toothLandmark_annotation)
@@ -248,4 +253,5 @@ class MenuBarManager:
         self.action_view_layout.setText(_translate("MainWindow", WindowConstant.ACTION_VIEW_LAYOUT))
         self.action_tooth_measurement.setText(_translate("MainWindow", WindowConstant.ACTION_TOOTH_MEASUREMENT))
         self.action_cpr.setText(_translate("MainWindow", WindowConstant.ACTION_CPR))
+        self.action_add_data.setText(_translate("MainWindow", '加载数据…'))
 

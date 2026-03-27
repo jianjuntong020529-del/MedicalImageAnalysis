@@ -74,7 +74,9 @@ class MenuBarService:
         self.vtkWidget_Volume = self.viewModel.VolumeOrthorViewer.widget
         self.iren_Volume = self.viewModel.VolumeOrthorViewer.renderWindowInteractor
 
-
+        # 多图层分割叠加字典
+        # 格式: { item_name: {"xy": viewerLayer, "yz": viewerLayer, "xz": viewerLayer, "lut": lut} }
+        self.seg_layers: dict = {}
 
     def on_actionAdd_DICOM_Data(self):
         setFileIsEmpty(False)
@@ -159,50 +161,34 @@ class MenuBarService:
         except Exception:
             logger.exception('Create Volume error')
 
-    def on_actionAdd_NIFIT_Data(self, path, slice_index=None, color=None):
+    def on_actionAdd_NIFIT_Data(self, path, item_name=None, slice_index=None, color=None):
         """
-        加载NIFTI分割结果并与DICOM图像进行叠加显示
-        采用重建查看器的方式，创建新的DICOM和分割查看器
-        
-        Args:
-            path: NIFTI文件路径
-            slice_index: 可选的切片索引，如果为None则使用默认切片
-            color: 可选的颜色元组 (r, g, b)，范围 0-1，默认随机颜色
+        加载NIFTI分割结果并与DICOM图像进行叠加显示。
+        item_name 用于多图层字典管理；若为 None 则用文件名作为 key。
         """
         try:
             logger.info(f"Loading NIFTI segmentation file: {path}")
 
             if not os.path.exists(path):
-                error_msg = f"NIFTI file does not exist: {path}"
-                logger.error(error_msg)
-                raise FileNotFoundError(error_msg)
-            
+                raise FileNotFoundError(f"NIFTI file does not exist: {path}")
+
             if not (path.endswith('.nii') or path.endswith('.nii.gz')):
-                error_msg = f"Invalid NIFTI file format: {path}. Expected .nii or .nii.gz"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise ValueError(f"Invalid NIFTI file format: {path}")
+
+            if item_name is None:
+                item_name = os.path.basename(path)
 
             if DataAndModelType.DATA_TYPE is None:
                 self.load_nii(path)
             else:
-                self.imageblend_seg_mask(path, slice_index, color=color)
-            
+                self.imageblend_seg_mask(path, item_name, slice_index, color=color)
+
             logger.info("NIFTI segmentation loaded and overlaid successfully")
-            
-        except FileNotFoundError:
-            # Re-raise file not found errors
-            raise
-        except ValueError:
-            # Re-raise validation errors
-            raise
-        except RuntimeError:
-            # Re-raise VTK errors
+
+        except (FileNotFoundError, ValueError, RuntimeError):
             raise
         except Exception as e:
-            # Catch any unexpected errors
-            error_msg = f"Unexpected error loading NIFTI segmentation: {e}"
-            logger.exception(error_msg)
-            raise RuntimeError(error_msg) from e
+            raise RuntimeError(f"Unexpected error loading NIFTI segmentation: {e}") from e
 
     def load_nii(self, path):
 
@@ -428,159 +414,148 @@ class MenuBarService:
 
         logger.info("NII data loading and visualization completed successfully")
 
-    def imageblend_seg_mask(self, path, slice_index=None, color=None):
+    def imageblend_seg_mask(self, path, item_name, slice_index=None, color=None):
         """
-        创建DICOM和分割图像的混合显示
-        重建DICOM查看器和分割查看器，实现叠加显示
+        将一个 NII 分割文件作为独立图层叠加到三个正交视图上。
+        支持多图层同时叠加：每个 item_name 对应字典 seg_layers 中的一个条目，
+        拥有独立的 vtkImageActor 和 vtkLookupTable，互不覆盖。
+
+        首次调用时会重建 DICOM 底层查看器（create_dicom_viewer），
+        后续叠加新图层时直接复用已有的 DICOM 渲染器，不重置相机。
 
         Args:
-            path: .nii文件路劲
-            slice_index: 可选的切片索引
+            path:       .nii / .nii.gz 文件路径
+            item_name:  DataManagerModel 中的唯一名称，用作字典 key
+            slice_index: 可选初始切片索引
+            color:      可选 (r, g, b) 元组，范围 0-1，默认红色
         """
         try:
-            logger.debug("Creating blended DICOM and segmentation viewers")
+            logger.debug(f"Adding segmentation layer '{item_name}' from {path}")
 
-            # 读取NIFTI分割文件
-            self.reader_seg = vtk.vtkNIFTIImageReader()
-            self.reader_seg.SetFileName(path)
-
+            # ── 1. 读取并对齐 NII 数据 ────────────────────────────────────────
+            reader_seg = vtk.vtkNIFTIImageReader()
+            reader_seg.SetFileName(path)
             try:
-                self.reader_seg.Update()
+                reader_seg.Update()
             except Exception as e:
-                error_msg = f"VTK NIFTI reader failed to read file: {path}"
-                logger.error(f"{error_msg}. Error: {e}")
-                raise RuntimeError(error_msg) from e
+                raise RuntimeError(f"VTK NIFTI reader failed: {path}") from e
 
-            # 获取DICOM和分割图像数据
             dicom_image = self.reader.GetOutput()
-            seg_image = self.reader_seg.GetOutput()
+            seg_image = reader_seg.GetOutput()
 
-            # 验证图像数据有效性
             if seg_image is None or seg_image.GetNumberOfPoints() == 0:
-                error_msg = f"NIFTI file contains no valid image data: {path}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise ValueError(f"NIFTI file contains no valid image data: {path}")
 
-            # 记录图像信息用于调试
-            seg_dims = seg_image.GetDimensions()
-            seg_origin = seg_image.GetOrigin()
-            seg_spacing = seg_image.GetSpacing()
+            seg_dims   = seg_image.GetDimensions()
             dicom_dims = dicom_image.GetDimensions()
-            dicom_origin = dicom_image.GetOrigin()
-            dicom_spacing = dicom_image.GetSpacing()
-
-            logger.debug(f"NIFTI dimensions: {seg_dims}, origin: {seg_origin}, spacing: {seg_spacing}")
-            logger.debug(f"DICOM dimensions: {dicom_dims}, origin: {dicom_origin}, spacing: {dicom_spacing}")
-
-            # 验证坐标系统兼容性
             if seg_dims != dicom_dims:
-                logger.warning(f"Dimension mismatch - NIFTI: {seg_dims}, DICOM: {dicom_dims}")
-                logger.warning("Proceeding with alignment, but results may not be accurate")
+                logger.warning(f"Dimension mismatch — NIFTI: {seg_dims}, DICOM: {dicom_dims}")
 
-            # 对分割图像进行翻转以匹配DICOM坐标系
-            try:
-                flip1 = vtk.vtkImageFlip()
-                flip1.SetInputData(seg_image)
-                flip1.SetFilteredAxis(2)
-                flip1.Update()
+            flip1 = vtk.vtkImageFlip()
+            flip1.SetInputData(seg_image)
+            flip1.SetFilteredAxis(2)
+            flip1.Update()
 
-                flip2 = vtk.vtkImageFlip()
-                flip2.SetInputData(flip1.GetOutput())
-                flip2.SetFilteredAxis(1)
-                flip2.Update()
-            except Exception as e:
-                error_msg = "Failed to apply coordinate flipping transformations"
-                logger.error(f"{error_msg}. Error: {e}")
-                raise RuntimeError(error_msg) from e
+            flip2 = vtk.vtkImageFlip()
+            flip2.SetInputData(flip1.GetOutput())
+            flip2.SetFilteredAxis(1)
+            flip2.Update()
 
-            # 确保分割结果与DICOM的几何信息一致
-            try:
-                change_info = vtk.vtkImageChangeInformation()
-                change_info.SetInputConnection(flip2.GetOutputPort())
-                change_info.SetOutputOrigin(dicom_image.GetOrigin())
-                change_info.SetOutputSpacing(dicom_image.GetSpacing())
-                change_info.Update()
+            change_info = vtk.vtkImageChangeInformation()
+            change_info.SetInputConnection(flip2.GetOutputPort())
+            change_info.SetOutputOrigin(dicom_image.GetOrigin())
+            change_info.SetOutputSpacing(dicom_image.GetSpacing())
+            change_info.Update()
+            seg_image_aligned = change_info.GetOutput()
 
-                self.seg_image_aligned = change_info.GetOutput()
-            except Exception as e:
-                error_msg = "Failed to align NIFTI coordinate system with DICOM"
-                logger.error(f"{error_msg}. Error: {e}")
-                raise RuntimeError(error_msg) from e
+            # ── 2. 为该图层创建独立的 LUT ────────────────────────────────────
+            data_min, data_max = seg_image_aligned.GetScalarRange()
+            lut = vtk.vtkLookupTable()
+            lut.SetNumberOfColors(256)
+            lut.SetTableRange(data_min, data_max)
+            lut.SetTableValue(0, 0.0, 0.0, 0.0, 0.0)   # 背景完全透明
+            r, g, b = color if color is not None else (1.0, 0.0, 0.0)
+            for i in range(1, 256):
+                lut.SetTableValue(i, r, g, b, 1.0)
+            lut.Build()
 
-            # 验证对齐结果
-            aligned_origin = self.seg_image_aligned.GetOrigin()
-            aligned_spacing = self.seg_image_aligned.GetSpacing()
-            logger.debug(f"Aligned origin: {aligned_origin}, spacing: {aligned_spacing}")
+            # ── 3. 首次叠加时重建 DICOM 底层查看器 ───────────────────────────
+            # 若已有任何图层存在，说明 DICOM viewer 已建好，跳过重建以保留相机
+            is_first_layer = len(self.seg_layers) == 0
 
-            # 获取分割图像的实际数据范围
-            data_min, data_max = self.seg_image_aligned.GetScalarRange()
-            logger.info(f"Segmentation image scalar range: {data_min} - {data_max}")
+            self.rwi_XY = self.viewer_XY.GetRenderWindow().GetInteractor()
+            self.rwi_YZ = self.viewer_YZ.GetRenderWindow().GetInteractor()
+            self.rwi_XZ = self.viewer_XZ.GetRenderWindow().GetInteractor()
 
-            # 创建颜色查找表
-            try:
-                self.color_table = vtk.vtkLookupTable()
-                self.color_table.SetNumberOfColors(256)
-                self.color_table.SetTableRange(data_min, data_max)
-                self.color_table.SetTableValue(0, 0.0, 0.0, 1.0, 0.0)  # 背景透明
-                if color is not None:
-                    r, g, b = color
-                else:
-                    r, g, b = 1.0, 0.0, 0.0  # 默认红色
-                for i in range(1, 256):
-                    self.color_table.SetTableValue(i, r, g, b, 1.0)
-                self.color_table.Build()
-            except Exception as e:
-                error_msg = "Failed to create color lookup table"
-                logger.error(f"{error_msg}. Error: {e}")
-                raise RuntimeError(error_msg) from e
+            if is_first_layer:
+                pos_XY, fp_XY, self.viewer_dicom_xy = self.create_dicom_viewer(
+                    self.viewModel.AxialOrthoViewer,    self.vtkWidget_XY, self.label_XY,
+                    self.verticalSlider_XY, self.id_XY, slice_index)
+                pos_YZ, fp_YZ, self.viewer_dicom_yz = self.create_dicom_viewer(
+                    self.viewModel.SagittalOrthoViewer, self.vtkWidget_YZ, self.label_YZ,
+                    self.verticalSlider_YZ, self.id_YZ, slice_index)
+                pos_XZ, fp_XZ, self.viewer_dicom_xz = self.create_dicom_viewer(
+                    self.viewModel.CoronalOrthoViewer,  self.vtkWidget_XZ, self.label_XZ,
+                    self.verticalSlider_XZ, self.id_XZ, slice_index)
+                CameraPosition.position_XY  = pos_XY;  CameraPosition.focalPoint_XY = fp_XY
+                CameraPosition.position_YZ  = pos_YZ;  CameraPosition.focalPoint_YZ = fp_YZ
+                CameraPosition.position_XZ  = pos_XZ;  CameraPosition.focalPoint_XZ = fp_XZ
 
-            self.rwi_XY = self.viewer_XY.GetRenderWindow().GetInteractor();
-            self.rwi_YZ = self.viewer_YZ.GetRenderWindow().GetInteractor();
-            self.rwi_XZ = self.viewer_XZ.GetRenderWindow().GetInteractor();
+            # ── 4. 为三个视图分别创建分割图层 Actor ──────────────────────────
+            # 临时把对齐后的数据存到 self，供 create_seg_viewer 使用
+            self.seg_image_aligned = seg_image_aligned
+            self.color_table = lut   # create_seg_viewer 内部会读取 self.color_table
 
-            # 创建新的DICOM查看器
-            position_XY,focalPoint_XY,self.viewer_dicom_xy = self.create_dicom_viewer(
-                self.viewModel.AxialOrthoViewer, self.vtkWidget_XY, self.label_XY,
-                self.verticalSlider_XY, self.id_XY, slice_index
-            )
-            position_YZ,focalPoint_YZ,self.viewer_dicom_yz = self.create_dicom_viewer(
+            layer_xy = self.create_seg_viewer(
+                self.viewModel.AxialOrthoViewer,    self.vtkWidget_XY, self.label_XY,
+                self.verticalSlider_XY, self.id_XY, slice_index)
+            layer_yz = self.create_seg_viewer(
                 self.viewModel.SagittalOrthoViewer, self.vtkWidget_YZ, self.label_YZ,
-                self.verticalSlider_YZ, self.id_YZ, slice_index
-            )
-            position_XZ,focalPoint_XZ,self.viewer_dicom_xz = self.create_dicom_viewer(
-                self.viewModel.CoronalOrthoViewer, self.vtkWidget_XZ, self.label_XZ,
-                self.verticalSlider_XZ, self.id_XZ, slice_index
-            )
+                self.verticalSlider_YZ, self.id_YZ, slice_index)
+            layer_xz = self.create_seg_viewer(
+                self.viewModel.CoronalOrthoViewer,  self.vtkWidget_XZ, self.label_XZ,
+                self.verticalSlider_XZ, self.id_XZ, slice_index)
 
-            CameraPosition.position_XY = position_XY
-            CameraPosition.position_YZ = position_YZ
-            CameraPosition.position_XZ = position_XZ
-            CameraPosition.focalPoint_XY = focalPoint_XY
-            CameraPosition.focalPoint_YZ = focalPoint_YZ
-            CameraPosition.focalPoint_XZ = focalPoint_XZ
+            # ── 5. 写入字典 ───────────────────────────────────────────────────
+            self.seg_layers[item_name] = {
+                "xy":  layer_xy,
+                "yz":  layer_yz,
+                "xz":  layer_xz,
+                "lut": lut,
+            }
 
-
-            # 创建分割查看器
-            self.viewer_seg_xy = self.create_seg_viewer(
-                self.viewModel.AxialOrthoViewer, self.vtkWidget_XY, self.label_XY,
-                self.verticalSlider_XY, self.id_XY, slice_index
-            )
-            self.viewer_seg_yz = self.create_seg_viewer(
-                self.viewModel.SagittalOrthoViewer, self.vtkWidget_YZ, self.label_YZ,
-                self.verticalSlider_YZ, self.id_YZ, slice_index
-            )
-            self.viewer_seg_xz = self.create_seg_viewer(
-                self.viewModel.CoronalOrthoViewer, self.vtkWidget_XZ, self.label_XZ,
-                self.verticalSlider_XZ, self.id_XZ, slice_index
-            )
-
-
-            logger.info("Successfully created blended DICOM and segmentation viewers")
+            logger.info(f"Segmentation layer '{item_name}' added. Total layers: {len(self.seg_layers)}")
 
         except Exception as e:
-            error_msg = f"Failed to create blended viewers: {e}"
+            error_msg = f"Failed to add segmentation layer '{item_name}': {e}"
             logger.exception(error_msg)
             raise RuntimeError(error_msg) from e
+
+    def remove_seg_layer(self, item_name: str):
+        """从三个视图的渲染器中移除指定图层的 Actor，并从字典中删除。"""
+        layer = self.seg_layers.pop(item_name, None)
+        if layer is None:
+            return
+        view_configs = [
+            ("xy", self.viewModel.AxialOrthoViewer),
+            ("yz", self.viewModel.SagittalOrthoViewer),
+            ("xz", self.viewModel.CoronalOrthoViewer),
+        ]
+        for key, ortho_viewer in view_configs:
+            viewer_layer = layer.get(key)
+            if viewer_layer:
+                try:
+                    actor = viewer_layer.GetImageActor()
+                    ortho_viewer.viewer.GetRenderer().RemoveActor(actor)
+                except Exception:
+                    pass
+        # 刷新
+        for w in (self.vtkWidget_XY, self.vtkWidget_YZ, self.vtkWidget_XZ):
+            try:
+                w.GetRenderWindow().Render()
+            except Exception:
+                pass
+        logger.info(f"Segmentation layer '{item_name}' removed.")
 
 
     def create_dicom_viewer(self, ortho_viewer, vtkWidget, label, verticalSlider, id, slice_index):
@@ -1137,11 +1112,18 @@ class MenuBarService:
             viewer_XY.UpdateDisplayExtent()
             viewer_XY.Render()
 
-            # 确保分割查看器同步更新
-            if hasattr(self, 'viewer_seg_xy') and self.viewer_seg_xy:
-                self.viewer_seg_xy.SetSlice(value_XY)
-                self.viewer_seg_xy.UpdateDisplayExtent()
-                self.viewer_seg_xy.Render()
+            # 同步所有分割图层
+            from src.model.DataManagerModel import get_data_manager
+            dm = get_data_manager()
+            for name, layers in self.seg_layers.items():
+                layer = layers.get("xy")
+                if layer:
+                    layer.SetSlice(value_XY)
+                    layer.UpdateDisplayExtent()
+                    layer.Render()
+                    item = dm.get_item(name)
+                    if item:
+                        layer.GetImageActor().SetVisibility(1 if item.visible else 0)
             self.label_XY.setText("Slice %d/%d" % (viewer_XY.GetSlice(), viewer_XY.GetSliceMax()))
             
 
@@ -1175,11 +1157,18 @@ class MenuBarService:
             viewer_YZ.SetSlice(value)
             viewer_YZ.UpdateDisplayExtent()
             viewer_YZ.Render()
-            # 确保分割查看器同步更新
-            if hasattr(self, 'viewer_seg_yz') and self.viewer_seg_yz:
-                self.viewer_seg_yz.SetSlice(value)
-                self.viewer_seg_yz.UpdateDisplayExtent()
-                self.viewer_seg_yz.Render()
+            # 同步所有分割图层
+            from src.model.DataManagerModel import get_data_manager
+            dm = get_data_manager()
+            for name, layers in self.seg_layers.items():
+                layer = layers.get("yz")
+                if layer:
+                    layer.SetSlice(value)
+                    layer.UpdateDisplayExtent()
+                    layer.Render()
+                    item = dm.get_item(name)
+                    if item:
+                        layer.GetImageActor().SetVisibility(1 if item.visible else 0)
             self.label_YZ.setText("Slice %d/%d" % (viewer_YZ.GetSlice(), viewer_YZ.GetSliceMax()))
         else:
             center = list(viewer_XY.GetResliceCursor().GetCenter())
@@ -1211,11 +1200,18 @@ class MenuBarService:
             viewer_XZ.SetSlice(value)
             viewer_XZ.UpdateDisplayExtent()
             viewer_XZ.Render()
-            # 确保分割查看器同步更新
-            if hasattr(self, 'viewer_seg_xz') and self.viewer_seg_xz:
-                self.viewer_seg_xz.SetSlice(value)
-                self.viewer_seg_xz.UpdateDisplayExtent()
-                self.viewer_seg_xz.Render()
+            # 同步所有分割图层
+            from src.model.DataManagerModel import get_data_manager
+            dm = get_data_manager()
+            for name, layers in self.seg_layers.items():
+                layer = layers.get("xz")
+                if layer:
+                    layer.SetSlice(value)
+                    layer.UpdateDisplayExtent()
+                    layer.Render()
+                    item = dm.get_item(name)
+                    if item:
+                        layer.GetImageActor().SetVisibility(1 if item.visible else 0)
             self.label_XZ.setText("Slice %d/%d" % (viewer_XZ.GetSlice(), viewer_XZ.GetSliceMax()))
         else:
             center = list(viewer_XY.GetResliceCursor().GetCenter())

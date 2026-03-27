@@ -370,23 +370,18 @@ class MenuBarController(MenuBarManager):
         )
     
     def _on_nifti_loaded_success(self, data, meta):
-        """NIFTI 加载成功回调"""
+        """NIFTI 加载成功回调（仅用于原始NII作为主图像时）"""
         try:
             logger.info(f"NIFTI 数据加载成功: {meta}")
-            
-            # 调用原有的服务层方法
-            self.menuBarService.on_actionAdd_NIFIT_Data(meta['路径'])
-            
-            # 恢复缩放交互功能
+            path = meta.get('路径', '')
+            name = os.path.basename(path)
+            self.menuBarService.on_actionAdd_NIFIT_Data(path, item_name=name)
             self.restore_zoom_interaction()
-            
             logger.info("NIFTI 数据处理完成")
-            
         except Exception as e:
             logger.error(f"处理 NIFTI 数据时出错: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(
-                self.QMainWindow,
-                "数据处理错误",
+                self.QMainWindow, "数据处理错误",
                 f"加载成功但处理数据时出错：\n{str(e)}"
             )
     
@@ -729,16 +724,17 @@ class MenuBarController(MenuBarManager):
             if visible:
                 # 叠加显示：调用 menuBarService 加载 NII 叠加
                 try:
-                    self.menuBarService.on_actionAdd_NIFIT_Data(item.path, color=self._item_color_rgb(name))
-                    self._active_seg_name = name
-                    self._active_seg_path = item.path
+                    if name not in self.menuBarService.seg_layers:
+                        self.menuBarService.on_actionAdd_NIFIT_Data(
+                            item.path, item_name=name, color=self._item_color_rgb(name))
+                    self._set_seg_layer_visibility(name, True)
                     logger.info(f"叠加显示分割图像: {name}")
                 except Exception as e:
                     logger.error(f"叠加显示失败: {e}", exc_info=True)
             else:
-                # 隐藏叠加：重建纯 DICOM 视图
+                # 隐藏叠加
                 try:
-                    self.menuBarService.on_actionAdd_DICOM_Data()
+                    self._set_seg_layer_visibility(name, False)
                     logger.info(f"隐藏分割叠加: {name}")
                 except Exception as e:
                     logger.error(f"隐藏叠加失败: {e}", exc_info=True)
@@ -764,12 +760,8 @@ class MenuBarController(MenuBarManager):
         data_manager = get_data_manager()
 
         if data_type == TYPE_SEG:
-            # 恢复纯 DICOM 视图（如果还有原始图像）
-            if data_manager.raw_items():
-                try:
-                    self.menuBarService.on_actionAdd_DICOM_Data()
-                except Exception as e:
-                    logger.error(f"删除分割后恢复视图失败: {e}", exc_info=True)
+            # 从渲染器移除该图层并清理字典
+            self.menuBarService.remove_seg_layer(name)
 
         elif data_type == TYPE_3D:
             renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
@@ -1583,7 +1575,7 @@ class MenuBarController(MenuBarManager):
     def on_item_activated(self, name: str, data_type: str, path: str):
         """
         数据管理器点击行时触发：
-        - 分割图像(TYPE_SEG)：叠加到当前原始图像，若无原始图像则单独显示
+        - 分割图像(TYPE_SEG)：若该图层尚未加载则叠加，已加载则切换可见
         - 原始图像(TYPE_RAW)：切换主视图到该数据
         - 三维数据(TYPE_3D)：无需处理（已在加载时渲染）
         """
@@ -1595,11 +1587,12 @@ class MenuBarController(MenuBarManager):
         if data_type == TYPE_SEG:
             logger.info(f"激活分割图像: {name} → {path}")
             try:
-                self.menuBarService.on_actionAdd_NIFIT_Data(path, color=self._item_color_rgb(name))
-                self.restore_zoom_interaction()
+                if name not in self.menuBarService.seg_layers:
+                    self.menuBarService.on_actionAdd_NIFIT_Data(
+                        path, item_name=name, color=self._item_color_rgb(name))
+                    self.restore_zoom_interaction()
                 get_data_manager().set_visible(name, True)
-                self._active_seg_name = name
-                self._active_seg_path = path
+                self._set_seg_layer_visibility(name, True)
             except Exception as e:
                 logger.error(f"叠加分割图像失败: {e}", exc_info=True)
                 QtWidgets.QMessageBox.warning(
@@ -1607,10 +1600,9 @@ class MenuBarController(MenuBarManager):
                 )
 
         elif data_type == TYPE_RAW:
-            # 原始图像点击：如果是NII且当前没有加载过，则显示
             logger.info(f"激活原始图像: {name} → {path}")
             try:
-                self.menuBarService.on_actionAdd_NIFIT_Data(path)
+                self.menuBarService.on_actionAdd_NIFIT_Data(path, item_name=name)
                 self.restore_zoom_interaction()
                 get_data_manager().set_visible(name, True)
             except Exception as e:
@@ -1619,8 +1611,8 @@ class MenuBarController(MenuBarManager):
     def on_item_visibility_changed(self, name: str, data_type: str, visible: bool):
         """
         复选框切换：
-        - 勾选：若分割层未激活则先叠加，已激活则直接显示
-        - 取消：隐藏叠加层
+        - 勾选：若图层未加载则先叠加，已加载则直接显示/隐藏
+        - 取消：隐藏该图层的 Actor
         """
         from src.model.DataManagerModel import TYPE_SEG, get_data_manager
         if data_type != TYPE_SEG:
@@ -1631,40 +1623,35 @@ class MenuBarController(MenuBarManager):
             return
 
         if visible:
-            # 检查分割层是否已经激活（viewer_seg_xy 存在）
-            seg_xy = getattr(self.menuBarService, 'viewer_seg_xy', None)
-            # 用 _active_seg_path 记录当前激活的分割路径
-            active_path = getattr(self, '_active_seg_path', None)
-
-            if seg_xy is None or active_path != item.path:
-                # 未激活或切换了不同分割文件 → 重新叠加
+            if name not in self.menuBarService.seg_layers:
+                # 图层尚未创建，先叠加
                 logger.info(f"勾选激活分割叠加: {name} → {item.path}")
                 try:
-                    self.menuBarService.on_actionAdd_NIFIT_Data(item.path, color=self._item_color_rgb(name))
+                    self.menuBarService.on_actionAdd_NIFIT_Data(
+                        item.path, item_name=name, color=self._item_color_rgb(name))
                     self.restore_zoom_interaction()
-                    self._active_seg_path = item.path
-                    self._active_seg_name = name
                 except Exception as e:
                     logger.error(f"叠加分割图像失败: {e}", exc_info=True)
                     QtWidgets.QMessageBox.warning(
                         self.QMainWindow, '叠加失败', f'叠加分割图像失败：\n{str(e)}'
                     )
                     return
-            else:
-                # 已激活，直接显示
-                self._set_seg_visibility(True)
+            self._set_seg_layer_visibility(name, True)
         else:
-            # 取消勾选 → 隐藏叠加层
-            self._set_seg_visibility(False)
+            self._set_seg_layer_visibility(name, False)
 
-    def _set_seg_visibility(self, visible: bool):
-        """切换分割叠加层的 actor 可见性并刷新视图"""
-        for viewer_attr in ('viewer_seg_xy', 'viewer_seg_yz', 'viewer_seg_xz'):
-            viewer = getattr(self.menuBarService, viewer_attr, None)
-            if viewer:
-                actor = viewer.GetImageActor()
-                if actor:
-                    actor.SetVisibility(1 if visible else 0)
+    def _set_seg_layer_visibility(self, name: str, visible: bool):
+        """切换指定图层的 Actor 可见性并刷新视图"""
+        layer = self.menuBarService.seg_layers.get(name)
+        if not layer:
+            return
+        for key in ("xy", "yz", "xz"):
+            viewer_layer = layer.get(key)
+            if viewer_layer:
+                try:
+                    viewer_layer.GetImageActor().SetVisibility(1 if visible else 0)
+                except Exception:
+                    pass
         for w_attr in ('vtkWidget_XY', 'vtkWidget_YZ', 'vtkWidget_XZ'):
             w = getattr(self.menuBarService, w_attr, None)
             if w:
@@ -1672,12 +1659,12 @@ class MenuBarController(MenuBarManager):
                     w.GetRenderWindow().Render()
                 except Exception:
                     pass
-        logger.info(f"分割叠加层可见性 → {visible}")
+        logger.info(f"图层 '{name}' 可见性 → {visible}")
 
     def on_item_color_changed(self, name: str, data_type: str, color: str):
         """
         颜色选择器回调：更新对应 VTK actor 的颜色
-        - TYPE_SEG：更新分割叠加层的 LookupTable 颜色
+        - TYPE_SEG：直接找到该图层的 LUT 更新颜色，无需重新加载
         - TYPE_3D：更新 STL actor 的 Property 颜色
         """
         from src.model.DataManagerModel import TYPE_SEG, TYPE_3D, get_data_manager
@@ -1688,31 +1675,15 @@ class MenuBarController(MenuBarManager):
         r, g, b = qc.redF(), qc.greenF(), qc.blueF()
 
         if data_type == TYPE_SEG:
-            active_name = getattr(self, '_active_seg_name', None)
-            color_table = getattr(self.menuBarService, 'color_table', None)
-            if color_table and active_name == name:
-                # 只更新当前激活显示的分割颜色
-                for i in range(1, 256):
-                    color_table.SetTableValue(i, r, g, b, 1.0)
-                color_table.Build()
-                color_table.Modified()
-                for viewer_attr in ('viewer_seg_xy', 'viewer_seg_yz', 'viewer_seg_xz'):
-                    viewer = getattr(self.menuBarService, viewer_attr, None)
-                    if viewer:
-                        try:
-                            actor = viewer.GetImageActor()
-                            if actor:
-                                actor.GetMapper().Modified()
-                                actor.GetProperty().Modified()
-                        except Exception:
-                            pass
-                for viewer_attr in ('viewer_dicom_xy', 'viewer_dicom_yz', 'viewer_dicom_xz'):
-                    viewer = getattr(self.menuBarService, viewer_attr, None)
-                    if viewer:
-                        try:
-                            viewer.Render()
-                        except Exception:
-                            pass
+            layer = self.menuBarService.seg_layers.get(name)
+            if layer:
+                lut = layer.get("lut")
+                if lut:
+                    for i in range(1, 256):
+                        lut.SetTableValue(i, r, g, b, 1.0)
+                    lut.Build()
+                    lut.Modified()
+                # 刷新三个视图
                 for w_attr in ('vtkWidget_XY', 'vtkWidget_YZ', 'vtkWidget_XZ'):
                     w = getattr(self.menuBarService, w_attr, None)
                     if w:
@@ -1721,11 +1692,9 @@ class MenuBarController(MenuBarManager):
                         except Exception:
                             pass
                 logger.info(f"分割颜色更新: {name} → {color}")
-            elif active_name != name:
-                # 非当前激活的分割，颜色已存入 model，下次激活时生效
-                logger.info(f"分割颜色已保存（非当前激活）: {name} → {color}")
             else:
-                logger.warning(f"color_table 未初始化，无法更新分割颜色: {name}")
+                # 图层尚未激活，颜色已存入 DataItem，下次激活时生效
+                logger.info(f"分割颜色已保存（图层未激活）: {name} → {color}")
 
         elif data_type == TYPE_3D:
             renderer = getattr(self.viewModel.VolumeOrthorViewer, 'renderer', None)
@@ -1811,14 +1780,13 @@ class MenuBarController(MenuBarManager):
 
                 elif fmt == 'NII':
                     def _nii_ok(data, meta, _n=name, _p=real_path, _dt=data_type):
-                        # 原始NII（无原始图像时）才立即显示，分割NII只存入DataManager
                         if _dt != TYPE_SEG:
                             self._on_nifti_loaded_success(data, meta)
                         else:
                             logger.info(f"分割文件 {_n} 已加载，等待用户点击激活叠加")
                         data_manager.add_item(DataItem(
                             name=_n, data_type=_dt, fmt='NII', path=_p,
-                            visible=False  # 默认不显示，点击后激活
+                            visible=False
                         ))
                         _run_next()
 
