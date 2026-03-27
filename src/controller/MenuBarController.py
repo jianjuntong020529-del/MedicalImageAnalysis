@@ -88,12 +88,11 @@ class MenuBarController(MenuBarManager):
         self.verticalSlider_YZ.valueChanged.connect(self.valuechange2)
         self.verticalSlider_XZ.valueChanged.connect(self.valuechange3)
 
-        self.actionAdd_DiICOM_Data.triggered.connect(self.on_actionAdd_DICOM_Data)
+        # self.actionAdd_DiICOM_Data.triggered.connect(self.on_actionAdd_DICOM_Data)
         self.actionAdd_IM0BIM_Data.triggered.connect(self.on_actionAdd_IM0BIM_Data)
-        self.actionAdd_STL_Data.triggered.connect(self.on_actionAdd_STL_Data)
-        self.actionAdd_NIFIT_Data.triggered.connect(self.on_actionAdd_NIFIT_Data)
+        # self.actionAdd_STL_Data.triggered.connect(self.on_actionAdd_STL_Data)
+        # self.actionAdd_NIFIT_Data.triggered.connect(self.on_actionAdd_NIFIT_Data)
         self.actionAdd_NPY_Data.triggered.connect(self.on_actionAdd_NPY_Data)
-        self.action_add_data.triggered.connect(self.on_action_add_data)
 
         self.action_generatePanormaic.triggered.connect(self.on_action_generatePanormaic)
         self.action_toothLandmark_annotation.triggered.connect(self.on_action_tooth_landmark_annotation)

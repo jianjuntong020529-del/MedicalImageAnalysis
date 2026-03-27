@@ -36,7 +36,7 @@ class ToolBarController(ToolBarManager):
         self.action_reset.triggered.connect(self.on_action_reset)
         self.action_dragging_image.triggered.connect(self.on_action_dragging_image)
         self.action_get_roi.triggered.connect(self.on_action_get_roi)
-        self.lineedit_Subjectname.textChanged[str].connect(self.lineedit_Subjectname_change_Func)  # 槽函数绑定
+        # self.lineedit_Subjectname.textChanged[str].connect(self.lineedit_Subjectname_change_Func)  # 槽函数绑定
 
     # 直尺测量功能
     def on_action_ruler(self):
@@ -399,6 +399,6 @@ class ToolBarController(ToolBarManager):
             self.toolBarService.clear_get_roi()
             self.action_get_roi.setChecked(False)
 
-    def lineedit_Subjectname_change_Func(self):
-        ParamConstant.SUBJECT_NAME = self.lineedit_Subjectname.text()
-        print(ParamConstant.SUBJECT_NAME)
+    # def lineedit_Subjectname_change_Func(self):
+    #     ParamConstant.SUBJECT_NAME = self.lineedit_Subjectname.text()
+    #     print(ParamConstant.SUBJECT_NAME)

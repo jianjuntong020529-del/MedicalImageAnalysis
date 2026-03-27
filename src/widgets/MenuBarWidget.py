@@ -41,21 +41,21 @@ class MenuBarManager:
         self.QMainWindow.setMenuBar(self.menubar)
 
         # 添加子菜单栏到主菜单栏中
-        self.actionAdd_DiICOM_Data = QtWidgets.QAction(self.QMainWindow)
-        self.actionAdd_DiICOM_Data.setObjectName("actionAdd_DiICOM_Data")
+        # self.actionAdd_DiICOM_Data = QtWidgets.QAction(self.QMainWindow)
+        # self.actionAdd_DiICOM_Data.setObjectName("actionAdd_DiICOM_Data")
 
         self.actionAdd_IM0BIM_Data = QtWidgets.QAction(self.QMainWindow)
         self.actionAdd_IM0BIM_Data.setObjectName("actionAdd_IM0BIM_Data")
 
-        self.actionAdd_NIFIT_Data = QtWidgets.QAction(self.QMainWindow)
-        self.actionAdd_NIFIT_Data.setObjectName("actionAdd_NIFIT_Data")
+        # self.actionAdd_NIFIT_Data = QtWidgets.QAction(self.QMainWindow)
+        # self.actionAdd_NIFIT_Data.setObjectName("actionAdd_NIFIT_Data")
 
         self.actionAdd_NPY_Data = QtWidgets.QAction(self.QMainWindow)
         self.actionAdd_NPY_Data.setObjectName("actionAdd_NPY_Data")
 
-        self.actionAdd_STL_Data = QtWidgets.QAction(self.QMainWindow)
-        self.actionAdd_STL_Data.setObjectName("actionAdd_STL_Data")
-        self.actionAdd_STL_Data.setCheckable(True)
+        # self.actionAdd_STL_Data = QtWidgets.QAction(self.QMainWindow)
+        # self.actionAdd_STL_Data.setObjectName("actionAdd_STL_Data")
+        # self.actionAdd_STL_Data.setCheckable(True)
 
         self.action_generatePanormaic = QtWidgets.QAction(self.QMainWindow)
         self.action_generatePanormaic.setObjectName("action_generatePanormaic")
@@ -183,16 +183,11 @@ class MenuBarManager:
         self.saveResultAction.setCheckable(False)
 
 
-        self.fileMenu.addAction(self.actionAdd_DiICOM_Data)
+        # self.fileMenu.addAction(self.actionAdd_DiICOM_Data)
         self.fileMenu.addAction(self.actionAdd_IM0BIM_Data)
-        self.fileMenu.addAction(self.actionAdd_NIFIT_Data)
+        # self.fileMenu.addAction(self.actionAdd_NIFIT_Data)
         self.fileMenu.addAction(self.actionAdd_NPY_Data)
-        self.fileMenu.addAction(self.actionAdd_STL_Data)
-        self.fileMenu.addSeparator()
-        # 统一加载入口
-        self.action_add_data = QtWidgets.QAction(self.QMainWindow)
-        self.action_add_data.setObjectName("action_add_data")
-        self.fileMenu.addAction(self.action_add_data)
+        # self.fileMenu.addAction(self.actionAdd_STL_Data)
 
         self.toolMenu.addAction(self.action_generatePanormaic)
         self.toolMenu.addAction(self.action_toothLandmark_annotation)
@@ -230,11 +225,11 @@ class MenuBarManager:
         self.fileMenu.setTitle(_translate("MainWindow", WindowConstant.FILE_MENU))
         self.toolMenu.setTitle(_translate("MainWindow", WindowConstant.TOOL_MENU))
         self.segmentation_menu.setTitle(_translate("MainWindow", WindowConstant.SAM_MED2D_SEG))
-        self.actionAdd_DiICOM_Data.setText(_translate("MainWindow", WindowConstant.ADD_DICOM))
+        # self.actionAdd_DiICOM_Data.setText(_translate("MainWindow", WindowConstant.ADD_DICOM))
         self.actionAdd_IM0BIM_Data.setText(_translate("MainWindow", WindowConstant.ADD_IM0))
-        self.actionAdd_NIFIT_Data.setText(_translate("MainWindow", WindowConstant.ADD_NIFIT))
+        # self.actionAdd_NIFIT_Data.setText(_translate("MainWindow", WindowConstant.ADD_NIFIT))
         self.actionAdd_NPY_Data.setText(_translate("MainWindow", WindowConstant.ADD_NPY))
-        self.actionAdd_STL_Data.setText(_translate("MainWindow", WindowConstant.ADD_STL))
+        # self.actionAdd_STL_Data.setText(_translate("MainWindow", WindowConstant.ADD_STL))
         self.action_generatePanormaic.setText(_translate("MainWindow", WindowConstant.ACTION_GENERATE_PANORMAIC))
         self.action_toothLandmark_annotation.setText(_translate("MainWindow", WindowConstant.ACTION_TOOTH_LANDMARK_ANNOTATION))
         self.action_coronal_canal_annotation.setText(_translate("MainWindow", WindowConstant.ACTION_CORONAL_CANAL_ANNOTATION))
@@ -253,5 +248,5 @@ class MenuBarManager:
         self.action_view_layout.setText(_translate("MainWindow", WindowConstant.ACTION_VIEW_LAYOUT))
         self.action_tooth_measurement.setText(_translate("MainWindow", WindowConstant.ACTION_TOOTH_MEASUREMENT))
         self.action_cpr.setText(_translate("MainWindow", WindowConstant.ACTION_CPR))
-        self.action_add_data.setText(_translate("MainWindow", '加载数据…'))
+
 
