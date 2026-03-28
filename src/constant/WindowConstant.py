@@ -158,6 +158,9 @@ class WindowConstant:
     # 多曲面重建 CPR
     ACTION_CPR = "多曲面重建(CPR)"
 
+    # 图像增强工具栏
+    ACTION_IMAGE_ENHANCE = "影像增强"
+
 
 
 

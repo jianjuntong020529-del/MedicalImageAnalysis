@@ -105,6 +105,7 @@ class MenuBarController(MenuBarManager):
         self.action_nifti_segmentation_editor.triggered.connect(self.on_action_nifti_segmentation_editor)
         self.action_volume_render_toolbar.triggered.connect(self.on_action_volume_render_toolbar)
         self.action_view_layout.triggered.connect(self.on_action_view_layout)
+        self.action_image_enhance.triggered.connect(self.on_action_image_enhance)
         # action_tooth_measurement 在 MainWindow 里直接连接到 toothMeasurementController.show
         self.pointAction.triggered.connect(self.on_action_point)
         self.point_label_0.triggered.connect(self.select_point_label)
@@ -1066,6 +1067,14 @@ class MenuBarController(MenuBarManager):
         """打开/关闭视图布局控制面板"""
         if ToolBarWidget.view_layout_widget is not None:
             ToolBarWidget.view_layout_widget.show_panel()
+
+    def on_action_image_enhance(self):
+        """打开影像增强工作台（独立窗口）"""
+        from src.ui.ImageEnhanceWindow import ImageEnhanceWindow
+        if not hasattr(self, '_image_enhance_window') or self._image_enhance_window is None:
+            self._image_enhance_window = ImageEnhanceWindow(self.QMainWindow)
+        self._image_enhance_window.show()
+        self._image_enhance_window.raise_()
 
     def on_action_tooth_measurement(self):
         """打开牙齿分割测量面板"""

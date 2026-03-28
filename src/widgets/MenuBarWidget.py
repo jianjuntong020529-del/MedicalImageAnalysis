@@ -87,6 +87,11 @@ class MenuBarManager:
         self.action_cpr = QtWidgets.QAction(self.QMainWindow)
         self.action_cpr.setObjectName("action_cpr")
 
+        # 图像增强工具栏
+        self.action_image_enhance = QtWidgets.QAction(self.QMainWindow)
+        self.action_image_enhance.setObjectName("action_image_enhance")
+        self.action_image_enhance.setCheckable(True)
+
 
         self.action_implant_toolbar = QtWidgets.QAction(self.QMainWindow)
         self.action_implant_toolbar.setObjectName("action_implant_toolbar")
@@ -198,6 +203,7 @@ class MenuBarManager:
         self.toolMenu.addAction(self.action_nifti_segmentation_editor)
         self.toolMenu.addAction(self.action_volume_render_toolbar)
         self.toolMenu.addAction(self.action_view_layout)
+        self.toolMenu.addAction(self.action_image_enhance)
         self.toolMenu.addAction(self.action_tooth_measurement)
         self.toolMenu.addAction(self.action_cpr)
 
@@ -248,5 +254,6 @@ class MenuBarManager:
         self.action_view_layout.setText(_translate("MainWindow", WindowConstant.ACTION_VIEW_LAYOUT))
         self.action_tooth_measurement.setText(_translate("MainWindow", WindowConstant.ACTION_TOOTH_MEASUREMENT))
         self.action_cpr.setText(_translate("MainWindow", WindowConstant.ACTION_CPR))
+        self.action_image_enhance.setText(_translate("MainWindow", WindowConstant.ACTION_IMAGE_ENHANCE))
 
 
