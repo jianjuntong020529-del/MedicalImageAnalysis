@@ -61,5 +61,6 @@ class APPVisualStyle:
     CROSSHAIR = "<html><head/><body><p><span style=\' font-size:11pt; font-weight:600;\'>" + WindowConstant.CROSSHAIR + "</span></p></body></html>"
     DRAGGING = "<html><head/><body><p><span style=\' font-size:11pt; font-weight:600;\'>" + WindowConstant.DRAGGING + "</span></p></body></html>"
     ROI = "<html><head/><body><p><span style=\' font-size:11pt; font-weight:600;\'>" + WindowConstant.ROI + "</span></p></body></html>"
+    VIEW_LAYOUT = "<html><head/><body><p><span style=\' font-size:11pt; font-weight:600;\'>" + WindowConstant.VIEW_LAYOUT + "</span></p></body></html>"
 
 

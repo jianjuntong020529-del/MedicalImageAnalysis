@@ -79,6 +79,10 @@ class ToolBarManager:
         self.action_get_roi.setCheckable(True)
         self.action_get_roi.setIcon(QtGui.QIcon(QIconConstant.GET_ROI))
 
+        # 视图布局按钮
+        self.action_view_layout_toolbar = QtWidgets.QAction(self.QMainWindow)
+        self.action_view_layout_toolbar.setObjectName("action_view_layout_toolbar")
+        self.action_view_layout_toolbar.setIcon(QtGui.QIcon(QIconConstant.VIEW_LAYOUT_ICON))
 
         self.toolBar.addAction(self.action_ruler)
         self.toolBar.addAction(self.action_paint)
@@ -89,6 +93,8 @@ class ToolBarManager:
         self.toolBar.addAction(self.action_reset)
         self.toolBar.addAction(self.action_dragging_image)
         self.toolBar.addAction(self.action_get_roi)
+        self.toolBar.addSeparator()
+        self.toolBar.addAction(self.action_view_layout_toolbar)
 
         # 在工具栏的右侧添加间隔符
         spacer = QtWidgets.QWidget()
@@ -122,3 +128,4 @@ class ToolBarManager:
         self.action_crosshair.setText(_translate("MainWindow", APPVisualStyle.CROSSHAIR))
         self.action_dragging_image.setText(_translate("MainWindow", APPVisualStyle.DRAGGING))
         self.action_get_roi.setText(_translate("MainWindow", APPVisualStyle.ROI))
+        self.action_view_layout_toolbar.setText(_translate("MainWindow", APPVisualStyle.VIEW_LAYOUT))

@@ -202,7 +202,6 @@ class MenuBarManager:
         self.toolMenu.addAction(self.action_parameters_toolbar)
         self.toolMenu.addAction(self.action_nifti_segmentation_editor)
         self.toolMenu.addAction(self.action_volume_render_toolbar)
-        self.toolMenu.addAction(self.action_view_layout)
         self.toolMenu.addAction(self.action_image_enhance)
         self.toolMenu.addAction(self.action_tooth_measurement)
         self.toolMenu.addAction(self.action_cpr)

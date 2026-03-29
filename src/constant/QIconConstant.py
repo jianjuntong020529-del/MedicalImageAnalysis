@@ -32,3 +32,6 @@ class QIconConstant:
 
     GET_ROI = TOOLBAR_IMAGE_PATH + "get_roi.png"
 
+    # 视图布局
+    VIEW_LAYOUT_ICON = TOOLBAR_IMAGE_PATH + "view_layout.png"
+

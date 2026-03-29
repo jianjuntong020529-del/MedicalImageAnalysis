@@ -48,6 +48,7 @@ class WindowConstant:
 
     # ToolBar
     RULER = "直尺"
+    VIEW_LAYOUT = "视图布局"
     PAINT = "画笔"
     POLY_LINE = "折线标注"
     ANGLE = "角度测量"

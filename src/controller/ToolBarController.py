@@ -36,6 +36,7 @@ class ToolBarController(ToolBarManager):
         self.action_reset.triggered.connect(self.on_action_reset)
         self.action_dragging_image.triggered.connect(self.on_action_dragging_image)
         self.action_get_roi.triggered.connect(self.on_action_get_roi)
+        self.action_view_layout_toolbar.triggered.connect(self.on_action_view_layout_toolbar)
         # self.lineedit_Subjectname.textChanged[str].connect(self.lineedit_Subjectname_change_Func)  # 槽函数绑定
 
     # 直尺测量功能
@@ -399,6 +400,8 @@ class ToolBarController(ToolBarManager):
             self.toolBarService.clear_get_roi()
             self.action_get_roi.setChecked(False)
 
-    # def lineedit_Subjectname_change_Func(self):
-    #     ParamConstant.SUBJECT_NAME = self.lineedit_Subjectname.text()
-    #     print(ParamConstant.SUBJECT_NAME)
+    def on_action_view_layout_toolbar(self):
+        """点击工具栏视图布局按钮，弹出布局选择面板"""
+        from src.model.ToolBarWidgetModel import ToolBarWidget
+        if ToolBarWidget.view_layout_widget is not None:
+            ToolBarWidget.view_layout_widget.show_panel()
