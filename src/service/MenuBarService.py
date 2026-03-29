@@ -990,6 +990,10 @@ class MenuBarService:
 
         ortho_viewer.viewer = viewer
 
+        # 通知播放控制器数据已更新
+        if getattr(ortho_viewer, 'playback_controller', None) is not None:
+            ortho_viewer.playback_controller.on_data_loaded()
+
         return focalPoint, position
 
     def clear_mousewheel_forward_backward_event(self, viewer_list):

@@ -6,6 +6,8 @@ from src.model.VolumeRenderModel import VolumeRender
 from src.model.BaseModel import BaseModel
 from src.utils.state_store import get_state_store
 from src.utils.logger import get_logger
+from src.controller.PlaybackController import PlaybackController
+from src.widgets.PlaybackBarWidget import PlaybackBar
 
 logger = get_logger(__name__)
 
@@ -110,6 +112,20 @@ class QtOrthoViewer:
                 self.imageView.SetSliceOrientationToXZ()
             self.imageView.Render()
         logger.debug("QtOrthoViewer type set to %s", self.type)
+
+        # 播放控制器 & 工具栏（仅切片视图）
+        if self.label != "3D Viewer":
+            self.playback_controller = PlaybackController(
+                viewer_getter=lambda: self.imageView,
+                slider=self.slider,
+                label=self.slider_label,
+                view_id=self.type,
+            )
+            self.playback_bar = PlaybackBar(self.widget, self.playback_controller)
+            self.slider.valueChanged.connect(self.playback_controller.on_slider_changed)
+        else:
+            self.playback_controller = None
+            self.playback_bar = None
 
     # def update_viewer(self):
     #     type = None
