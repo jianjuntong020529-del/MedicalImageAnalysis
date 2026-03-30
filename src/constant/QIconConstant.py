@@ -32,6 +32,21 @@ class QIconConstant:
 
     GET_ROI = TOOLBAR_IMAGE_PATH + "get_roi.png"
 
+    # 矩形 ROI 标注
+    RECT_ROI_ICON = TOOLBAR_IMAGE_PATH + "rect_roi.png"
+
+    # 椭圆 ROI 标注
+    ELLIPSE_ROI_ICON = TOOLBAR_IMAGE_PATH + "ellipse_roi.png"
+
+    # 曲线标注
+    SPLINE_ROI_ICON = TOOLBAR_IMAGE_PATH + "roi/spline_roi.png"
+
+    # 自由形状标注
+    POLYGON_ROI_ICON = TOOLBAR_IMAGE_PATH + "roi/polygon_roi.png"
+
+    # 清除全部ROI标注
+    DELETE_ROI_ICON = TOOLBAR_IMAGE_PATH + "roi/delete_roi.png"
+
     # 视图布局
     VIEW_LAYOUT_ICON = TOOLBAR_IMAGE_PATH + "view_layout.png"
 

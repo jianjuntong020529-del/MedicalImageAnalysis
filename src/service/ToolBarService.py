@@ -19,6 +19,8 @@ from src.model.ToolBarWidgetModel import ToolBarWidget
 from src.service.AnnotationService import AnnotationService
 from src.utils.globalVariables import *
 from src.interactor_style.FourViewerInteractorStyle import MouseWheelForward, MouseWheelBackWard
+from src.interactor_style.RectROIInteractorStyle import RectROIManager
+from src.interactor_style.EllipseROIInteractorStyle import EllipseROIManager
 
 
 class ToolBarService:
@@ -66,6 +68,11 @@ class ToolBarService:
         self.angle_widgets_1 = []
         self.angle_widgets_2 = []
         self.angle_widgets_3 = []
+
+        # 矩形 ROI 标注管理器
+        self._rect_roi_manager = RectROIManager(self.viewModel)
+        # 椭圆 ROI 标注管理器
+        self._ellipse_roi_manager = EllipseROIManager(self.viewModel)
 
     # 直尺测量功能
     def on_action_ruler(self):
@@ -1067,3 +1074,36 @@ class ToolBarService:
                 viewer_InteractorStyle.RemoveObservers("MouseWheelBackwardEvent")
         except:
             print("event not exist")
+
+    # 矩形 ROI 标注功能
+    def on_action_rect_roi(self):
+        self._rect_roi_manager.activate()
+        ToolBarEnable.rect_roi_enable = True
+
+    def clear_rect_roi(self):
+        self._rect_roi_manager.deactivate()
+        ToolBarEnable.rect_roi_enable = False
+
+    def clear_all_rect_roi(self):
+        """清除全部矩形标注（含已绘制的）"""
+        self._rect_roi_manager.clear_all()
+        ToolBarEnable.rect_roi_enable = False
+
+    def on_action_ellipse_roi(self):
+        self._ellipse_roi_manager.activate()
+        ToolBarEnable.ellipse_roi_enable = True
+
+    def clear_ellipse_roi(self):
+        self._ellipse_roi_manager.deactivate()
+        ToolBarEnable.ellipse_roi_enable = False
+
+    def clear_all_ellipse_roi(self):
+        self._ellipse_roi_manager.clear_all()
+        ToolBarEnable.ellipse_roi_enable = False
+
+    def clear_all_annotations(self):
+        """清除所有矩形和椭圆标注"""
+        self._rect_roi_manager.clear_all()
+        self._ellipse_roi_manager.clear_all()
+        ToolBarEnable.rect_roi_enable = False
+        ToolBarEnable.ellipse_roi_enable = False

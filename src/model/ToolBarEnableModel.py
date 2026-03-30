@@ -7,3 +7,5 @@ class ToolBarEnable:
     dragging_enable = False
     crosshair_enable = False
     roi_enable = False
+    rect_roi_enable = False
+    ellipse_roi_enable = False

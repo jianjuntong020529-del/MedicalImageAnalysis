@@ -37,6 +37,9 @@ class ToolBarController(ToolBarManager):
         self.action_dragging_image.triggered.connect(self.on_action_dragging_image)
         self.action_get_roi.triggered.connect(self.on_action_get_roi)
         self.action_view_layout_toolbar.triggered.connect(self.on_action_view_layout_toolbar)
+        self.action_rect_roi.triggered.connect(self.on_action_rect_roi)
+        self.action_ellipse_roi.triggered.connect(self.on_action_ellipse_roi)
+        self.action_clear_all_annotations.triggered.connect(self.on_action_clear_all_annotations)
         # self.lineedit_Subjectname.textChanged[str].connect(self.lineedit_Subjectname_change_Func)  # 槽函数绑定
 
     # 直尺测量功能
@@ -405,3 +408,87 @@ class ToolBarController(ToolBarManager):
         from src.model.ToolBarWidgetModel import ToolBarWidget
         if ToolBarWidget.view_layout_widget is not None:
             ToolBarWidget.view_layout_widget.show_panel()
+
+    def on_action_rect_roi(self):
+        if getFileIsEmpty():
+            self.action_rect_roi.setChecked(False)
+            return
+        if not ToolBarEnable.rect_roi_enable:
+            # 关闭其他互斥工具
+            if ToolBarEnable.ruler_enable:
+                self.toolBarService.clear_ruler()
+                self.action_ruler.setChecked(False)
+            if ToolBarEnable.paint_enable:
+                self.toolBarService.clear_paint()
+                self.action_paint.setChecked(False)
+            if ToolBarEnable.polyline_enable:
+                self.toolBarService.clear_polyline()
+                self.action_polyline.setChecked(False)
+            if ToolBarEnable.angle_enable:
+                self.toolBarService.clear_angle()
+                self.action_angle.setChecked(False)
+            if ToolBarEnable.pixel_enable:
+                self.toolBarService.clear_pixel()
+                self.action_pixel.setChecked(False)
+            if ToolBarEnable.crosshair_enable:
+                self.toolBarService.clear_crosshair()
+                self.action_crosshair.setChecked(False)
+            if ToolBarEnable.dragging_enable:
+                self.QMainWindow.setCursor(Qt.ArrowCursor)
+                self.toolBarService.clear_dragging_image()
+                self.action_dragging_image.setChecked(False)
+            if ToolBarEnable.roi_enable:
+                self.toolBarService.clear_get_roi()
+                self.action_get_roi.setChecked(False)
+            if ToolBarEnable.ellipse_roi_enable:
+                self.toolBarService.clear_ellipse_roi()
+                self.action_ellipse_roi.setChecked(False)
+            self.toolBarService.on_action_rect_roi()
+        else:
+            self.toolBarService.clear_rect_roi()
+            self.action_rect_roi.setChecked(False)
+
+    def on_action_ellipse_roi(self):
+        if getFileIsEmpty():
+            self.action_ellipse_roi.setChecked(False)
+            return
+        if not ToolBarEnable.ellipse_roi_enable:
+            # 关闭其他互斥工具
+            if ToolBarEnable.ruler_enable:
+                self.toolBarService.clear_ruler()
+                self.action_ruler.setChecked(False)
+            if ToolBarEnable.paint_enable:
+                self.toolBarService.clear_paint()
+                self.action_paint.setChecked(False)
+            if ToolBarEnable.polyline_enable:
+                self.toolBarService.clear_polyline()
+                self.action_polyline.setChecked(False)
+            if ToolBarEnable.angle_enable:
+                self.toolBarService.clear_angle()
+                self.action_angle.setChecked(False)
+            if ToolBarEnable.pixel_enable:
+                self.toolBarService.clear_pixel()
+                self.action_pixel.setChecked(False)
+            if ToolBarEnable.crosshair_enable:
+                self.toolBarService.clear_crosshair()
+                self.action_crosshair.setChecked(False)
+            if ToolBarEnable.dragging_enable:
+                self.QMainWindow.setCursor(Qt.ArrowCursor)
+                self.toolBarService.clear_dragging_image()
+                self.action_dragging_image.setChecked(False)
+            if ToolBarEnable.roi_enable:
+                self.toolBarService.clear_get_roi()
+                self.action_get_roi.setChecked(False)
+            if ToolBarEnable.rect_roi_enable:
+                self.toolBarService.clear_rect_roi()
+                self.action_rect_roi.setChecked(False)
+            self.toolBarService.on_action_ellipse_roi()
+        else:
+            self.toolBarService.clear_ellipse_roi()
+            self.action_ellipse_roi.setChecked(False)
+
+    def on_action_clear_all_annotations(self):
+        """清除所有矩形和椭圆标注"""
+        self.toolBarService.clear_all_annotations()
+        self.action_rect_roi.setChecked(False)
+        self.action_ellipse_roi.setChecked(False)

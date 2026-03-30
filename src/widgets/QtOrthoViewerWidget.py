@@ -116,7 +116,7 @@ class QtOrthoViewer:
         # 播放控制器 & 工具栏（仅切片视图）
         if self.label != "3D Viewer":
             self.playback_controller = PlaybackController(
-                viewer_getter=lambda: self.imageView,
+                viewer_getter=lambda: self.viewer,
                 slider=self.slider,
                 label=self.slider_label,
                 view_id=self.type,

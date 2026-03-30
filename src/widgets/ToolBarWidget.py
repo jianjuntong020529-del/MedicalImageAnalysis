@@ -79,6 +79,82 @@ class ToolBarManager:
         self.action_get_roi.setCheckable(True)
         self.action_get_roi.setIcon(QtGui.QIcon(QIconConstant.GET_ROI))
 
+        # 标注工具按钮（带下拉菜单）
+        self._annotation_menu = QtWidgets.QMenu(self.QMainWindow)
+        self._annotation_menu.setStyleSheet("""
+            QMenu {
+                padding: 4px 2px;
+            }
+            QMenu::item {
+                padding: 5px 16px 5px 6px;
+                border-radius: 4px;
+                margin: 2px 4px;
+                min-width: 80px;
+            }
+            QMenu::item:selected {
+                background-color: #e8f0fe;
+                color: #1a73e8;
+            }
+            QMenu::item:checked {
+                background-color: #e8f0fe;
+                border-left: 3px solid #1a73e8;
+                color: #1a73e8;
+            }
+            QMenu::item[objectName="clear_all"] {
+                color: #d32f2f;
+            }
+            QMenu::item[objectName="clear_all"]:selected {
+                background-color: #fdecea;
+                color: #d32f2f;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #e0e0e0;
+                margin: 4px 8px;
+            }
+        """)
+
+        self.action_rect_roi = QtWidgets.QAction(self.QMainWindow)
+        self.action_rect_roi.setCheckable(True)
+        self.action_rect_roi.setObjectName("action_rect_roi")
+        self.action_rect_roi.setIcon(QtGui.QIcon(QIconConstant.RECT_ROI_ICON))
+        self.action_rect_roi.setText("矩形")
+        self._annotation_menu.addAction(self.action_rect_roi)
+
+        self.action_ellipse_roi = QtWidgets.QAction(self.QMainWindow)
+        self.action_ellipse_roi.setCheckable(True)
+        self.action_ellipse_roi.setObjectName("action_ellipse_roi")
+        self.action_ellipse_roi.setIcon(QtGui.QIcon(QIconConstant.ELLIPSE_ROI_ICON))
+        self.action_ellipse_roi.setText("椭圆")
+        self._annotation_menu.addAction(self.action_ellipse_roi)
+
+        self._annotation_menu.addSeparator()
+        self.action_clear_all_annotations = QtWidgets.QAction(self.QMainWindow)
+        self.action_clear_all_annotations.setObjectName("action_clear_all_annotations")
+        self.action_clear_all_annotations.setIcon(QtGui.QIcon(QIconConstant.DELETE_ROI_ICON))
+        self.action_clear_all_annotations.setText("清除全部标注")
+        self._annotation_menu.addAction(self.action_clear_all_annotations)
+
+        # 工具栏上的下拉按钮
+        self._annotation_tool_btn = QtWidgets.QToolButton(self.QMainWindow)
+        self._annotation_tool_btn.setIcon(QtGui.QIcon(QIconConstant.RECT_ROI_ICON))
+        self._annotation_tool_btn.setToolTip("标注工具 (矩形/椭圆)")
+        self._annotation_tool_btn.setCheckable(True)
+        self._annotation_tool_btn.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+        self._annotation_tool_btn.setMenu(self._annotation_menu)
+        self._annotation_tool_btn.setFixedSize(36, 32)
+        # 点击主按钮直接触发当前选中的标注类型
+        self._annotation_tool_btn.clicked.connect(
+            lambda: self.action_rect_roi.trigger()
+        )
+        # 选择菜单项后更新主按钮图标
+        self.action_rect_roi.triggered.connect(
+            lambda: self._annotation_tool_btn.setIcon(QtGui.QIcon(QIconConstant.RECT_ROI_ICON))
+        )
+        self.action_ellipse_roi.triggered.connect(
+            lambda: self._annotation_tool_btn.setIcon(QtGui.QIcon(QIconConstant.ELLIPSE_ROI_ICON))
+        )
+
         # 视图布局按钮
         self.action_view_layout_toolbar = QtWidgets.QAction(self.QMainWindow)
         self.action_view_layout_toolbar.setObjectName("action_view_layout_toolbar")
@@ -93,6 +169,7 @@ class ToolBarManager:
         self.toolBar.addAction(self.action_reset)
         self.toolBar.addAction(self.action_dragging_image)
         self.toolBar.addAction(self.action_get_roi)
+        self.toolBar.addWidget(self._annotation_tool_btn)
         self.toolBar.addSeparator()
         self.toolBar.addAction(self.action_view_layout_toolbar)
 
