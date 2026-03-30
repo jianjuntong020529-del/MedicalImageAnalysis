@@ -128,6 +128,20 @@ class ToolBarManager:
         self.action_ellipse_roi.setText("椭圆")
         self._annotation_menu.addAction(self.action_ellipse_roi)
 
+        self.action_spline_roi = QtWidgets.QAction(self.QMainWindow)
+        self.action_spline_roi.setCheckable(True)
+        self.action_spline_roi.setObjectName("action_spline_roi")
+        self.action_spline_roi.setIcon(QtGui.QIcon(QIconConstant.SPLINE_ROI_ICON))
+        self.action_spline_roi.setText("曲线")
+        self._annotation_menu.addAction(self.action_spline_roi)
+
+        self.action_polygon_roi = QtWidgets.QAction(self.QMainWindow)
+        self.action_polygon_roi.setCheckable(True)
+        self.action_polygon_roi.setObjectName("action_polygon_roi")
+        self.action_polygon_roi.setIcon(QtGui.QIcon(QIconConstant.POLYGON_ROI_ICON))
+        self.action_polygon_roi.setText("自由形状")
+        self._annotation_menu.addAction(self.action_polygon_roi)
+
         self._annotation_menu.addSeparator()
         self.action_clear_all_annotations = QtWidgets.QAction(self.QMainWindow)
         self.action_clear_all_annotations.setObjectName("action_clear_all_annotations")
@@ -153,6 +167,12 @@ class ToolBarManager:
         )
         self.action_ellipse_roi.triggered.connect(
             lambda: self._annotation_tool_btn.setIcon(QtGui.QIcon(QIconConstant.ELLIPSE_ROI_ICON))
+        )
+        self.action_spline_roi.triggered.connect(
+            lambda: self._annotation_tool_btn.setIcon(QtGui.QIcon(QIconConstant.SPLINE_ROI_ICON))
+        )
+        self.action_polygon_roi.triggered.connect(
+            lambda: self._annotation_tool_btn.setIcon(QtGui.QIcon(QIconConstant.POLYGON_ROI_ICON))
         )
 
         # 视图布局按钮

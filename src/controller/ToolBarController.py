@@ -39,6 +39,8 @@ class ToolBarController(ToolBarManager):
         self.action_view_layout_toolbar.triggered.connect(self.on_action_view_layout_toolbar)
         self.action_rect_roi.triggered.connect(self.on_action_rect_roi)
         self.action_ellipse_roi.triggered.connect(self.on_action_ellipse_roi)
+        self.action_spline_roi.triggered.connect(self.on_action_spline_roi)
+        self.action_polygon_roi.triggered.connect(self.on_action_polygon_roi)
         self.action_clear_all_annotations.triggered.connect(self.on_action_clear_all_annotations)
         # self.lineedit_Subjectname.textChanged[str].connect(self.lineedit_Subjectname_change_Func)  # 槽函数绑定
 
@@ -414,35 +416,24 @@ class ToolBarController(ToolBarManager):
             self.action_rect_roi.setChecked(False)
             return
         if not ToolBarEnable.rect_roi_enable:
-            # 关闭其他互斥工具
             if ToolBarEnable.ruler_enable:
-                self.toolBarService.clear_ruler()
-                self.action_ruler.setChecked(False)
+                self.toolBarService.clear_ruler(); self.action_ruler.setChecked(False)
             if ToolBarEnable.paint_enable:
-                self.toolBarService.clear_paint()
-                self.action_paint.setChecked(False)
+                self.toolBarService.clear_paint(); self.action_paint.setChecked(False)
             if ToolBarEnable.polyline_enable:
-                self.toolBarService.clear_polyline()
-                self.action_polyline.setChecked(False)
+                self.toolBarService.clear_polyline(); self.action_polyline.setChecked(False)
             if ToolBarEnable.angle_enable:
-                self.toolBarService.clear_angle()
-                self.action_angle.setChecked(False)
+                self.toolBarService.clear_angle(); self.action_angle.setChecked(False)
             if ToolBarEnable.pixel_enable:
-                self.toolBarService.clear_pixel()
-                self.action_pixel.setChecked(False)
+                self.toolBarService.clear_pixel(); self.action_pixel.setChecked(False)
             if ToolBarEnable.crosshair_enable:
-                self.toolBarService.clear_crosshair()
-                self.action_crosshair.setChecked(False)
+                self.toolBarService.clear_crosshair(); self.action_crosshair.setChecked(False)
             if ToolBarEnable.dragging_enable:
                 self.QMainWindow.setCursor(Qt.ArrowCursor)
-                self.toolBarService.clear_dragging_image()
-                self.action_dragging_image.setChecked(False)
+                self.toolBarService.clear_dragging_image(); self.action_dragging_image.setChecked(False)
             if ToolBarEnable.roi_enable:
-                self.toolBarService.clear_get_roi()
-                self.action_get_roi.setChecked(False)
-            if ToolBarEnable.ellipse_roi_enable:
-                self.toolBarService.clear_ellipse_roi()
-                self.action_ellipse_roi.setChecked(False)
+                self.toolBarService.clear_get_roi(); self.action_get_roi.setChecked(False)
+            self._clear_all_annotation_tools()
             self.toolBarService.on_action_rect_roi()
         else:
             self.toolBarService.clear_rect_roi()
@@ -453,35 +444,24 @@ class ToolBarController(ToolBarManager):
             self.action_ellipse_roi.setChecked(False)
             return
         if not ToolBarEnable.ellipse_roi_enable:
-            # 关闭其他互斥工具
             if ToolBarEnable.ruler_enable:
-                self.toolBarService.clear_ruler()
-                self.action_ruler.setChecked(False)
+                self.toolBarService.clear_ruler(); self.action_ruler.setChecked(False)
             if ToolBarEnable.paint_enable:
-                self.toolBarService.clear_paint()
-                self.action_paint.setChecked(False)
+                self.toolBarService.clear_paint(); self.action_paint.setChecked(False)
             if ToolBarEnable.polyline_enable:
-                self.toolBarService.clear_polyline()
-                self.action_polyline.setChecked(False)
+                self.toolBarService.clear_polyline(); self.action_polyline.setChecked(False)
             if ToolBarEnable.angle_enable:
-                self.toolBarService.clear_angle()
-                self.action_angle.setChecked(False)
+                self.toolBarService.clear_angle(); self.action_angle.setChecked(False)
             if ToolBarEnable.pixel_enable:
-                self.toolBarService.clear_pixel()
-                self.action_pixel.setChecked(False)
+                self.toolBarService.clear_pixel(); self.action_pixel.setChecked(False)
             if ToolBarEnable.crosshair_enable:
-                self.toolBarService.clear_crosshair()
-                self.action_crosshair.setChecked(False)
+                self.toolBarService.clear_crosshair(); self.action_crosshair.setChecked(False)
             if ToolBarEnable.dragging_enable:
                 self.QMainWindow.setCursor(Qt.ArrowCursor)
-                self.toolBarService.clear_dragging_image()
-                self.action_dragging_image.setChecked(False)
+                self.toolBarService.clear_dragging_image(); self.action_dragging_image.setChecked(False)
             if ToolBarEnable.roi_enable:
-                self.toolBarService.clear_get_roi()
-                self.action_get_roi.setChecked(False)
-            if ToolBarEnable.rect_roi_enable:
-                self.toolBarService.clear_rect_roi()
-                self.action_rect_roi.setChecked(False)
+                self.toolBarService.clear_get_roi(); self.action_get_roi.setChecked(False)
+            self._clear_all_annotation_tools()
             self.toolBarService.on_action_ellipse_roi()
         else:
             self.toolBarService.clear_ellipse_roi()
@@ -492,3 +472,36 @@ class ToolBarController(ToolBarManager):
         self.toolBarService.clear_all_annotations()
         self.action_rect_roi.setChecked(False)
         self.action_ellipse_roi.setChecked(False)
+        self.action_spline_roi.setChecked(False)
+        self.action_polygon_roi.setChecked(False)
+
+    def _clear_all_annotation_tools(self):
+        """关闭所有标注工具（互斥用）"""
+        if ToolBarEnable.rect_roi_enable:
+            self.toolBarService.clear_rect_roi(); self.action_rect_roi.setChecked(False)
+        if ToolBarEnable.ellipse_roi_enable:
+            self.toolBarService.clear_ellipse_roi(); self.action_ellipse_roi.setChecked(False)
+        if ToolBarEnable.spline_roi_enable:
+            self.toolBarService.clear_spline_roi(); self.action_spline_roi.setChecked(False)
+        if ToolBarEnable.polygon_roi_enable:
+            self.toolBarService.clear_polygon_roi(); self.action_polygon_roi.setChecked(False)
+
+    def on_action_spline_roi(self):
+        if getFileIsEmpty():
+            self.action_spline_roi.setChecked(False); return
+        if not ToolBarEnable.spline_roi_enable:
+            self._clear_all_annotation_tools()
+            self.toolBarService.on_action_spline_roi()
+        else:
+            self.toolBarService.clear_spline_roi()
+            self.action_spline_roi.setChecked(False)
+
+    def on_action_polygon_roi(self):
+        if getFileIsEmpty():
+            self.action_polygon_roi.setChecked(False); return
+        if not ToolBarEnable.polygon_roi_enable:
+            self._clear_all_annotation_tools()
+            self.toolBarService.on_action_polygon_roi()
+        else:
+            self.toolBarService.clear_polygon_roi()
+            self.action_polygon_roi.setChecked(False)

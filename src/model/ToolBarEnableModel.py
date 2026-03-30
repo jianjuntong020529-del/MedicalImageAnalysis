@@ -9,3 +9,5 @@ class ToolBarEnable:
     roi_enable = False
     rect_roi_enable = False
     ellipse_roi_enable = False
+    spline_roi_enable = False
+    polygon_roi_enable = False

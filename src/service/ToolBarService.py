@@ -21,6 +21,8 @@ from src.utils.globalVariables import *
 from src.interactor_style.FourViewerInteractorStyle import MouseWheelForward, MouseWheelBackWard
 from src.interactor_style.RectROIInteractorStyle import RectROIManager
 from src.interactor_style.EllipseROIInteractorStyle import EllipseROIManager
+from src.interactor_style.SplineROIInteractorStyle import SplineROIManager
+from src.interactor_style.PolygonROIInteractorStyle import PolygonROIManager
 
 
 class ToolBarService:
@@ -73,6 +75,10 @@ class ToolBarService:
         self._rect_roi_manager = RectROIManager(self.viewModel)
         # 椭圆 ROI 标注管理器
         self._ellipse_roi_manager = EllipseROIManager(self.viewModel)
+        # 曲线标注管理器
+        self._spline_roi_manager = SplineROIManager(self.viewModel)
+        # 自由形状标注管理器
+        self._polygon_roi_manager = PolygonROIManager(self.viewModel)
 
     # 直尺测量功能
     def on_action_ruler(self):
@@ -1105,5 +1111,25 @@ class ToolBarService:
         """清除所有矩形和椭圆标注"""
         self._rect_roi_manager.clear_all()
         self._ellipse_roi_manager.clear_all()
+        self._spline_roi_manager.clear_all()
+        self._polygon_roi_manager.clear_all()
         ToolBarEnable.rect_roi_enable = False
         ToolBarEnable.ellipse_roi_enable = False
+        ToolBarEnable.spline_roi_enable = False
+        ToolBarEnable.polygon_roi_enable = False
+
+    def on_action_spline_roi(self):
+        self._spline_roi_manager.activate()
+        ToolBarEnable.spline_roi_enable = True
+
+    def clear_spline_roi(self):
+        self._spline_roi_manager.deactivate()
+        ToolBarEnable.spline_roi_enable = False
+
+    def on_action_polygon_roi(self):
+        self._polygon_roi_manager.activate()
+        ToolBarEnable.polygon_roi_enable = True
+
+    def clear_polygon_roi(self):
+        self._polygon_roi_manager.deactivate()
+        ToolBarEnable.polygon_roi_enable = False
