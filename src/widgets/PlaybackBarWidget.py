@@ -108,8 +108,9 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_stop  = self._make_btn()
         self._btn_speed = self._make_btn()
         self._btn_loop  = self._make_btn()
-        self._btn_lut   = self._make_btn()   # 伪彩条开关
-        self._btn_scale = self._make_btn()   # 刻度尺开关
+        self._btn_lut        = self._make_btn()   # 伪彩条开关
+        self._btn_scale      = self._make_btn()   # 刻度尺开关
+        self._btn_orientation = self._make_btn()  # 方位标识开关
 
         self._btn_prev.setToolTip("上一帧")
         self._btn_play.setToolTip("播放 / 暂停")
@@ -119,6 +120,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_loop.setToolTip("循环播放")
         self._btn_lut.setToolTip("伪彩条")
         self._btn_scale.setToolTip("刻度尺")
+        self._btn_orientation.setToolTip("方位标识")
 
         # 收起按钮放在工具栏最右侧
         self._btn_collapse = self._make_btn()
@@ -127,7 +129,8 @@ class PlaybackBar(QtWidgets.QWidget):
 
         for btn in [self._btn_prev, self._btn_play, self._btn_next,
                     self._btn_stop, self._btn_speed, self._btn_loop,
-                    self._btn_lut, self._btn_scale, self._btn_collapse]:
+                    self._btn_lut, self._btn_scale, self._btn_orientation,
+                    self._btn_collapse]:
             bar_layout.addWidget(btn)
 
         self._bar.adjustSize()
@@ -195,8 +198,9 @@ class PlaybackBar(QtWidgets.QWidget):
             self._lut_actions[name] = action
         self._lut_actions["Gray"].setChecked(True)
 
-        self._pseudo_color_bar = None   # 由外部注入（set_pseudo_color_bar）
-        self._scale_bar = None          # 由外部注入（set_scale_bar）
+        self._pseudo_color_bar  = None   # 由外部注入
+        self._scale_bar         = None   # 由外部注入
+        self._orientation_marker = None  # 由外部注入
 
         self.adjustSize()
 
@@ -232,9 +236,13 @@ class PlaybackBar(QtWidgets.QWidget):
         lut_color = QtGui.QColor(79, 195, 247) if (self._pseudo_color_bar and self._pseudo_color_bar._visible) else c
         self._btn_lut.setIcon(_colorize_icon(QtWidgets.QStyle.SP_DialogResetButton, lut_color))
 
-        # 刻度尺按钮：用标尺图标（SP_FileDialogDetailedView 近似）
+        # 刻度尺按钮
         scale_color = QtGui.QColor(79, 195, 247) if (self._scale_bar and self._scale_bar._visible) else c
         self._btn_scale.setIcon(_colorize_icon(QtWidgets.QStyle.SP_FileDialogDetailedView, scale_color))
+
+        # 方位标识按钮
+        ori_color = QtGui.QColor(79, 195, 247) if (self._orientation_marker and self._orientation_marker._visible) else c
+        self._btn_orientation.setIcon(_colorize_icon(QtWidgets.QStyle.SP_ComputerIcon, ori_color))
 
         # 收起/展开按钮始终白色
         collapse_icon = _colorize_icon(QtWidgets.QStyle.SP_TitleBarMinButton,
@@ -258,6 +266,7 @@ class PlaybackBar(QtWidgets.QWidget):
             lambda: self._on_lut_right_clicked()
         )
         self._btn_scale.clicked.connect(self._on_scale_clicked)
+        self._btn_orientation.clicked.connect(self._on_orientation_clicked)
         self._btn_collapse.clicked.connect(self.collapse)
 
         for name, action in self._speed_actions.items():
@@ -305,11 +314,19 @@ class PlaybackBar(QtWidgets.QWidget):
             self._render_vtk()
 
     def _on_scale_clicked(self):
-        """点击刻度尺按钮：切换刻度尺显示/隐藏"""
+        """切换刻度尺显示/隐藏"""
         if self._scale_bar is None:
             return
-        visible = self._scale_bar.toggle()
-        self._refresh_icons()   # 更新按钮高亮状态
+        self._scale_bar.toggle()
+        self._refresh_icons()
+        self._render_vtk()
+
+    def _on_orientation_clicked(self):
+        """切换方位标识显示/隐藏"""
+        if self._orientation_marker is None:
+            return
+        self._orientation_marker.toggle()
+        self._refresh_icons()
         self._render_vtk()
 
     def set_pseudo_color_bar(self, bar):
@@ -327,6 +344,10 @@ class PlaybackBar(QtWidgets.QWidget):
     def set_scale_bar(self, bar):
         """注入 ScaleBar 实例"""
         self._scale_bar = bar
+
+    def set_orientation_marker(self, marker):
+        """注入 OrientationMarker 实例"""
+        self._orientation_marker = marker
 
     def _render_vtk(self):
         try:
@@ -360,7 +381,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._is_enabled = enabled
         for btn in [self._btn_prev, self._btn_play, self._btn_next,
                     self._btn_stop, self._btn_speed, self._btn_loop,
-                    self._btn_lut, self._btn_scale]:
+                    self._btn_lut, self._btn_scale, self._btn_orientation]:
             btn.setEnabled(enabled)
         self._refresh_icons()
 

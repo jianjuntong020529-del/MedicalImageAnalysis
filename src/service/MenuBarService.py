@@ -1047,6 +1047,23 @@ class MenuBarService:
             ortho_viewer.scale_bar = new_sb
             if pb is not None:
                 pb.set_scale_bar(new_sb)
+
+            # 重建方位标识到新 renderer
+            om = getattr(ortho_viewer, 'orientation_marker', None)
+            old_om_visible = om._visible if om is not None else False
+            if om is not None:
+                try:
+                    om.remove()
+                except Exception:
+                    pass
+            from src.widgets.OrientationMarkerWidget import OrientationMarker
+            new_om = OrientationMarker(viewer.GetRenderer(), view_id)
+            new_om.attach(viewer)
+            if old_om_visible:
+                new_om.set_visible(True)
+            ortho_viewer.orientation_marker = new_om
+            if pb is not None:
+                pb.set_orientation_marker(new_om)
         except Exception:
             logger.debug("_refresh_pseudo_color_bar error", exc_info=True)
 

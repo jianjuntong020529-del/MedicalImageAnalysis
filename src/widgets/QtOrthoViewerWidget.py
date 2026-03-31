@@ -130,16 +130,22 @@ class QtOrthoViewer:
             self.pseudo_color_bar = PseudoColorBar(self.viewer.GetRenderer())
             self.playback_bar.set_pseudo_color_bar(self.pseudo_color_bar)
 
-            # 标尺（底部居中，随缩放更新）
+            # 标尺（底部，随缩放更新）
             self.scale_bar = ScaleBar(self.viewer.GetRenderer())
-            self.scale_bar.attach(self.viewer)
-            self.scale_bar.set_visible(False)  # 默认隐藏，与伪彩条一致
+            self.scale_bar.set_visible(False)
             self.playback_bar.set_scale_bar(self.scale_bar)
+
+            # 方位标识
+            from src.widgets.OrientationMarkerWidget import OrientationMarker
+            self.orientation_marker = OrientationMarker(self.viewer.GetRenderer(), self.type)
+            self.orientation_marker.set_visible(False)
+            self.playback_bar.set_orientation_marker(self.orientation_marker)
         else:
             self.playback_controller = None
             self.playback_bar = None
             self.pseudo_color_bar = None
             self.scale_bar = None
+            self.orientation_marker = None
 
     # def update_viewer(self):
     #     type = None
@@ -254,18 +260,16 @@ class QtOrthoViewer:
         else:
             VolumeRender.volume_cbct = None
 
-        style = vtk.vtkInteractorStyleTrackballCamera()  # 交互器样式的一种，该样式下，用户是通过控制相机对物体作旋转、放大、缩小等操作
+        style = vtk.vtkInteractorStyleTrackballCamera()
         style.SetDefaultRenderer(self.renderer)
         style.EnabledOn()
         self.renderWindowInteractor.SetInteractorStyle(style)
-        # ==================添加一个三维坐标指示=======================================
-        axesActor = vtk.vtkAxesActor()
-        axes = vtk.vtkOrientationMarkerWidget()
-        axes.SetOrientationMarker(axesActor)
-        axes.SetInteractor(self.renderWindowInteractor)
-        axes.EnabledOn()
-        axes.SetEnabled(1)
-        axes.InteractiveOff()
+
+        # ── 解剖方位正方体（替代坐标轴）────────────────────────────────────
+        self._orientation_cube_widget = _build_orientation_cube(
+            self.renderWindowInteractor
+        )
+
         self.renderer.ResetCamera()
         self.widget.Render()
         self.renderWindowInteractor.Initialize()
