@@ -1196,13 +1196,11 @@ class MenuBarService:
         style.EnabledOn()
         self.iren_Volume.SetInteractorStyle(style)
 
-        axesActor = vtk.vtkAxesActor()
-        axes = vtk.vtkOrientationMarkerWidget()
-        axes.SetOrientationMarker(axesActor)
-        axes.SetInteractor(self.iren_Volume)
-        axes.EnabledOn()
-        axes.SetEnabled(1)
-        axes.InteractiveOff()
+        # 解剖方位正方体（替代坐标轴）
+        from src.widgets.QtOrthoViewerWidget import _build_orientation_cube
+        cube_widget = _build_orientation_cube(self.iren_Volume)
+        self.viewModel.VolumeOrthorViewer._orientation_cube_widget = cube_widget
+
         renderer.ResetCamera()
         self.vtkWidget_Volume.Render()
 

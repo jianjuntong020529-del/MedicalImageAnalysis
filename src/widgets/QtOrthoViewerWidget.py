@@ -14,6 +14,111 @@ from src.widgets.ScaleBarWidget import ScaleBar
 logger = get_logger(__name__)
 
 
+# ── 解剖方位正方体 ─────────────────────────────────────────────────────────────
+
+def _build_orientation_cube(interactor: vtk.vtkRenderWindowInteractor):
+    """
+    构建解剖方位正方体，固定在右下角，随主视图相机同步旋转。
+    点击正方体面跳转到对应标准视角。
+    """
+    cube = vtk.vtkAnnotatedCubeActor()
+
+    # 六面文字 —— 根据 vtkDICOMImageReader 实际加载方向校正
+    # vtkDICOMImageReader 读取后：+Z = Superior, -Z = Inferior
+    # Y 轴：+Y = Anterior, -Y = Posterior（与 LPS 相反）
+    # X 轴：+X = Left, -X = Right
+    cube.SetXPlusFaceText("L")    # +X = Left
+    cube.SetXMinusFaceText("R")   # -X = Right
+    cube.SetYPlusFaceText("A")    # +Y = Anterior
+    cube.SetYMinusFaceText("P")   # -Y = Posterior
+    cube.SetZPlusFaceText("I")    # +Z = Inferior
+    cube.SetZMinusFaceText("S")   # -Z = Superior
+    cube.SetFaceTextScale(0.55)
+    cube.SetFaceTextVisibility(1)
+
+    # 修正各面文字镜像问题
+    cube.SetXFaceTextRotation(180)
+    cube.SetYFaceTextRotation(180)
+    cube.SetZFaceTextRotation(0)
+
+    # 棱线
+    cube.GetTextEdgesProperty().SetColor(0.2, 0.2, 0.2)
+    cube.GetTextEdgesProperty().SetLineWidth(1)
+
+    # 各面颜色
+    cube.GetXPlusFaceProperty().SetColor(0.85, 0.35, 0.35)   # L 红
+    cube.GetXMinusFaceProperty().SetColor(0.85, 0.35, 0.35)  # R 红
+    cube.GetYPlusFaceProperty().SetColor(0.35, 0.65, 0.35)   # P 绿
+    cube.GetYMinusFaceProperty().SetColor(0.35, 0.65, 0.35)  # A 绿
+    cube.GetZPlusFaceProperty().SetColor(0.95, 0.75, 0.20)   # S 黄
+    cube.GetZMinusFaceProperty().SetColor(0.35, 0.55, 0.85)  # I 蓝
+
+    cube.GetCubeProperty().SetColor(0.25, 0.25, 0.25)
+
+    # ── OrientationMarkerWidget 固定在右下角 ─────────────────────────────────
+    marker_widget = vtk.vtkOrientationMarkerWidget()
+    marker_widget.SetOrientationMarker(cube)
+    marker_widget.SetInteractor(interactor)
+    marker_widget.SetViewport(0.75, 0.0, 1.0, 0.25)
+    marker_widget.EnabledOn()
+    marker_widget.InteractiveOff()   # 固定，不可拖动
+
+    # ── 点击面切换视角 ────────────────────────────────────────────────────────
+    _VIEW_PRESETS = {
+        "L": ((1, 0, 0),   (0, 0, 1)),   # 从左看 → 相机在 +X
+        "R": ((-1, 0, 0),  (0, 0, 1)),   # 从右看 → 相机在 -X
+        "A": ((0, 1, 0),   (0, 0, 1)),   # 从前看 → 相机在 +Y
+        "P": ((0, -1, 0),  (0, 0, 1)),   # 从后看 → 相机在 -Y
+        "S": ((0, 0, -1),  (0, 1, 0)),   # 从上看 → 相机在 -Z
+        "I": ((0, 0, 1),   (0, -1, 0)),  # 从下看 → 相机在 +Z
+    }
+
+    def _snap_camera(renderer, rw, face):
+        cam_dir, view_up = _VIEW_PRESETS[face]
+        camera = renderer.GetActiveCamera()
+        focal  = camera.GetFocalPoint()
+        dist   = camera.GetDistance()
+        camera.SetPosition(
+            focal[0] + cam_dir[0] * dist,
+            focal[1] + cam_dir[1] * dist,
+            focal[2] + cam_dir[2] * dist,
+        )
+        camera.SetViewUp(*view_up)
+        renderer.ResetCameraClippingRange()
+        rw.Render()
+
+    def _on_left_button_press(obj, event):
+        try:
+            x, y = obj.GetEventPosition()
+            renderers = obj.GetRenderWindow().GetRenderers()
+            renderers.InitTraversal()
+            main_renderer = renderers.GetNextItem()
+
+            picker = vtk.vtkCellPicker()
+            picker.SetTolerance(0.005)
+            picker.Pick(x, y, 0, main_renderer)
+
+            actor = picker.GetActor()
+            if actor is not None:
+                normal = picker.GetPickNormal()
+                abs_n  = [abs(normal[i]) for i in range(3)]
+                max_i  = abs_n.index(max(abs_n))
+                sign   = 1 if normal[max_i] > 0 else -1
+                face_map = {
+                    (0, 1): "L", (0, -1): "R",
+                    (1, 1): "P", (1, -1): "A",
+                    (2, 1): "S", (2, -1): "I",
+                }
+                face = face_map.get((max_i, sign))
+                if face:
+                    _snap_camera(main_renderer, obj.GetRenderWindow(), face)
+        except Exception:
+            pass
+
+    interactor.AddObserver("LeftButtonPressEvent", _on_left_button_press, 1.0)
+    return marker_widget
+
+
 class QtOrthoViewer:
 
     def __init__(self, baseModelClass: BaseModel, widget, label):
