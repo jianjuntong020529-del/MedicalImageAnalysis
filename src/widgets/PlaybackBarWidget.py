@@ -109,6 +109,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_speed = self._make_btn()
         self._btn_loop  = self._make_btn()
         self._btn_lut   = self._make_btn()   # 伪彩条开关
+        self._btn_scale = self._make_btn()   # 刻度尺开关
 
         self._btn_prev.setToolTip("上一帧")
         self._btn_play.setToolTip("播放 / 暂停")
@@ -117,6 +118,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_speed.setToolTip("速率设置")
         self._btn_loop.setToolTip("循环播放")
         self._btn_lut.setToolTip("伪彩条")
+        self._btn_scale.setToolTip("刻度尺")
 
         # 收起按钮放在工具栏最右侧
         self._btn_collapse = self._make_btn()
@@ -125,7 +127,7 @@ class PlaybackBar(QtWidgets.QWidget):
 
         for btn in [self._btn_prev, self._btn_play, self._btn_next,
                     self._btn_stop, self._btn_speed, self._btn_loop,
-                    self._btn_lut, self._btn_collapse]:
+                    self._btn_lut, self._btn_scale, self._btn_collapse]:
             bar_layout.addWidget(btn)
 
         self._bar.adjustSize()
@@ -194,6 +196,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._lut_actions["Gray"].setChecked(True)
 
         self._pseudo_color_bar = None   # 由外部注入（set_pseudo_color_bar）
+        self._scale_bar = None          # 由外部注入（set_scale_bar）
 
         self.adjustSize()
 
@@ -229,6 +232,10 @@ class PlaybackBar(QtWidgets.QWidget):
         lut_color = QtGui.QColor(79, 195, 247) if (self._pseudo_color_bar and self._pseudo_color_bar._visible) else c
         self._btn_lut.setIcon(_colorize_icon(QtWidgets.QStyle.SP_DialogResetButton, lut_color))
 
+        # 刻度尺按钮：用标尺图标（SP_FileDialogDetailedView 近似）
+        scale_color = QtGui.QColor(79, 195, 247) if (self._scale_bar and self._scale_bar._visible) else c
+        self._btn_scale.setIcon(_colorize_icon(QtWidgets.QStyle.SP_FileDialogDetailedView, scale_color))
+
         # 收起/展开按钮始终白色
         collapse_icon = _colorize_icon(QtWidgets.QStyle.SP_TitleBarMinButton,
                                        _COLOR_ACTIVE)
@@ -250,6 +257,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_lut.customContextMenuRequested.connect(
             lambda: self._on_lut_right_clicked()
         )
+        self._btn_scale.clicked.connect(self._on_scale_clicked)
         self._btn_collapse.clicked.connect(self.collapse)
 
         for name, action in self._speed_actions.items():
@@ -296,6 +304,14 @@ class PlaybackBar(QtWidgets.QWidget):
                 self._refresh_icons()
             self._render_vtk()
 
+    def _on_scale_clicked(self):
+        """点击刻度尺按钮：切换刻度尺显示/隐藏"""
+        if self._scale_bar is None:
+            return
+        visible = self._scale_bar.toggle()
+        self._refresh_icons()   # 更新按钮高亮状态
+        self._render_vtk()
+
     def set_pseudo_color_bar(self, bar):
         """注入 PseudoColorBar 实例"""
         self._pseudo_color_bar = bar
@@ -307,6 +323,10 @@ class PlaybackBar(QtWidgets.QWidget):
         # 连接调色板菜单
         for name, action in self._lut_actions.items():
             action.triggered.connect(lambda checked, n=name: self._on_palette_selected(n))
+
+    def set_scale_bar(self, bar):
+        """注入 ScaleBar 实例"""
+        self._scale_bar = bar
 
     def _render_vtk(self):
         try:
@@ -339,7 +359,8 @@ class PlaybackBar(QtWidgets.QWidget):
     def set_enabled(self, enabled: bool) -> None:
         self._is_enabled = enabled
         for btn in [self._btn_prev, self._btn_play, self._btn_next,
-                    self._btn_stop, self._btn_speed, self._btn_loop]:
+                    self._btn_stop, self._btn_speed, self._btn_loop,
+                    self._btn_lut, self._btn_scale]:
             btn.setEnabled(enabled)
         self._refresh_icons()
 

@@ -9,6 +9,7 @@ from src.utils.logger import get_logger
 from src.controller.PlaybackController import PlaybackController
 from src.widgets.PlaybackBarWidget import PlaybackBar
 from src.widgets.PseudoColorBar import PseudoColorBar
+from src.widgets.ScaleBarWidget import ScaleBar
 
 logger = get_logger(__name__)
 
@@ -128,10 +129,17 @@ class QtOrthoViewer:
             # 伪彩条（叠加在 renderer 右侧）
             self.pseudo_color_bar = PseudoColorBar(self.viewer.GetRenderer())
             self.playback_bar.set_pseudo_color_bar(self.pseudo_color_bar)
+
+            # 标尺（底部居中，随缩放更新）
+            self.scale_bar = ScaleBar(self.viewer.GetRenderer())
+            self.scale_bar.attach(self.viewer)
+            self.scale_bar.set_visible(False)  # 默认隐藏，与伪彩条一致
+            self.playback_bar.set_scale_bar(self.scale_bar)
         else:
             self.playback_controller = None
             self.playback_bar = None
             self.pseudo_color_bar = None
+            self.scale_bar = None
 
     # def update_viewer(self):
     #     type = None

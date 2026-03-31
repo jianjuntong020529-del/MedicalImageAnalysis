@@ -1028,6 +1028,25 @@ class MenuBarService:
 
             # 注册 WindowLevelEvent 观察者，鼠标拖动调整对比度时同步伪彩条
             self._register_window_level_observer(viewer, new_bar)
+
+            # 重建标尺到新 renderer（和伪彩条一样，旧 renderer 已丢弃）
+            sb = getattr(ortho_viewer, 'scale_bar', None)
+            old_scale_visible = sb._visible if sb is not None else False
+            if sb is not None:
+                try:
+                    sb.remove()
+                except Exception:
+                    pass
+            from src.widgets.ScaleBarWidget import ScaleBar
+            new_sb = ScaleBar(viewer.GetRenderer())
+            view_id = getattr(ortho_viewer, 'type', 'XY')
+            new_sb.set_image_info(self.baseModelClass.bounds, view_id)
+            new_sb.attach(viewer)
+            if old_scale_visible:
+                new_sb.set_visible(True)
+            ortho_viewer.scale_bar = new_sb
+            if pb is not None:
+                pb.set_scale_bar(new_sb)
         except Exception:
             logger.debug("_refresh_pseudo_color_bar error", exc_info=True)
 
