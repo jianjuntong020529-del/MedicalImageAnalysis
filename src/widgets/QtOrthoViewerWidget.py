@@ -8,6 +8,7 @@ from src.utils.state_store import get_state_store
 from src.utils.logger import get_logger
 from src.controller.PlaybackController import PlaybackController
 from src.widgets.PlaybackBarWidget import PlaybackBar
+from src.widgets.PseudoColorBar import PseudoColorBar
 
 logger = get_logger(__name__)
 
@@ -123,9 +124,14 @@ class QtOrthoViewer:
             )
             self.playback_bar = PlaybackBar(self.widget, self.playback_controller)
             self.slider.valueChanged.connect(self.playback_controller.on_slider_changed)
+
+            # 伪彩条（叠加在 renderer 右侧）
+            self.pseudo_color_bar = PseudoColorBar(self.viewer.GetRenderer())
+            self.playback_bar.set_pseudo_color_bar(self.pseudo_color_bar)
         else:
             self.playback_controller = None
             self.playback_bar = None
+            self.pseudo_color_bar = None
 
     # def update_viewer(self):
     #     type = None

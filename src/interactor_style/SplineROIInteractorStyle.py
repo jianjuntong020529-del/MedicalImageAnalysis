@@ -1,6 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
-Spline ROI
+曲线标注（Spline ROI）
+交互：单击添加点，双击结束当前标注。
+曲线：Catmull-Rom 样条插值，统计曲线长度(mm)。
 """
 import math
 import numpy as np
@@ -13,8 +15,10 @@ _COLOR_SPLINE  = (0.9, 0.2, 0.9)
 _COLOR_HANDLE  = (0.2, 1.0, 0.2)
 _COLOR_PREVIEW = (0.9, 0.9, 0.2)
 _HANDLE_R_FACTOR = 4.0
-_DOUBLE_CLICK_MS = 400
+_DOUBLE_CLICK_MS = 400   # 双击判定时间窗(ms)
 
+
+# ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 def _world_to_pixel(pt, origin, spacing):
     return [int(round((pt[i] - origin[i]) / spacing[i])) for i in range(3)]
@@ -40,18 +44,26 @@ def _plane_axes(vt):
 
 
 def _catmull_rom(p0, p1, p2, p3, n=20):
+    """Catmull-Rom 样条插值，返回 p1->p2 之间的 n 个点"""
     pts = []
     for i in range(n):
         t = i / n
         t2, t3 = t*t, t*t*t
-        x = 0.5*((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3)
-        y = 0.5*((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)
-        z = 0.5*((2*p1[2]) + (-p0[2]+p2[2])*t + (2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2 + (-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)
+        x = 0.5*((2*p1[0]) + (-p0[0]+p2[0])*t +
+                 (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 +
+                 (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3)
+        y = 0.5*((2*p1[1]) + (-p0[1]+p2[1])*t +
+                 (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 +
+                 (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)
+        z = 0.5*((2*p1[2]) + (-p0[2]+p2[2])*t +
+                 (2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2 +
+                 (-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)
         pts.append((x, y, z))
     return pts
 
 
 def _spline_points(ctrl_pts, closed=False, n_seg=30):
+    """从控制点生成样条曲线点列表"""
     if len(ctrl_pts) < 2:
         return list(ctrl_pts)
     pts = list(ctrl_pts)
@@ -68,6 +80,7 @@ def _spline_points(ctrl_pts, closed=False, n_seg=30):
 
 
 def _seg_length(pts):
+    """计算折线总长度(mm)"""
     total = 0.0
     for i in range(len(pts) - 1):
         d = sum((pts[i+1][j] - pts[i][j])**2 for j in range(3))
@@ -76,6 +89,7 @@ def _seg_length(pts):
 
 
 def _make_polyline_actor(world_pts, color, lw=1.8, stipple=False):
+    """从世界坐标点列表创建折线 actor，返回 (actor, vtkPoints, vtkPolyData)"""
     n = len(world_pts)
     vtk_pts = vtk.vtkPoints()
     vtk_pts.SetNumberOfPoints(n)
@@ -118,7 +132,11 @@ def _make_text_actor(renderer):
     return ta
 
 
+# ── SplineAnnotation ──────────────────────────────────────────────────────────
+
 class SplineAnnotation:
+    """曲线标注：Catmull-Rom 样条 + 长度统计"""
+
     def __init__(self, ctrl_pts, vt, viewer, slice_idx, depth_val):
         self.ctrl_pts   = [list(p) for p in ctrl_pts]
         self.vt         = vt
@@ -140,27 +158,27 @@ class SplineAnnotation:
 
     def _build(self):
         spts = _spline_points(self.ctrl_pts, closed=False)
-        self._curve_actor, self._curve_pts, self._curve_poly = _make_polyline_actor(spts, _COLOR_SPLINE, lw=1.8)
+        self._curve_actor, self._curve_pts, self._curve_poly = \
+            _make_polyline_actor(spts, _COLOR_SPLINE, lw=1.8)
         self._renderer.AddActor(self._curve_actor)
         for p in self.ctrl_pts:
             a, src = _make_sphere(p, self._hr, _COLOR_HANDLE, self._renderer)
             self._handles.append((a, src))
         self._text_actor = _make_text_actor(self._renderer)
+        # 覆盖为归一化视口坐标，放右上角
+        self._text_actor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
+        self._text_actor.SetPosition(0.02, 0.75)
         self._update_stats()
 
     def _update_stats(self):
         spts = _spline_points(self.ctrl_pts, closed=False)
         length = _seg_length(spts)
         self._text_actor.SetInput(f"Length: {length:.2f} mm")
-        if self.ctrl_pts:
-            p = self.ctrl_pts[0]
-            try:
-                sp = self._viewer.GetInput().GetSpacing()
-                self._text_actor.GetPositionCoordinate().SetValue(p[0] + sp[0]*3, p[1] + sp[1]*3, p[2])
-            except Exception:
-                self._text_actor.GetPositionCoordinate().SetValue(p[0]+3, p[1]+3, p[2])
+        # 文字放在归一化视口右上角，和其他标注统一
+        self._text_actor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
+        self._text_actor.SetPosition(0.02, 0.75)
 
-    def update_geometry(self):
+    def update_geometry(self, recalc_stats=True):
         spts = _spline_points(self.ctrl_pts, closed=False)
         n = len(spts)
         new_lines = vtk.vtkCellArray()
@@ -177,7 +195,8 @@ class SplineAnnotation:
         for p in self.ctrl_pts:
             a, src = _make_sphere(p, self._hr, _COLOR_HANDLE, self._renderer)
             self._handles.append((a, src))
-        self._update_stats()
+        if recalc_stats:
+            self._update_stats()
 
     def update_visibility(self, current_slice):
         vis = 1 if current_slice == self.slice_idx else 0
@@ -198,41 +217,61 @@ class SplineAnnotation:
         if self._text_actor: self._renderer.RemoveActor(self._text_actor)
 
 
+# ── Handler ───────────────────────────────────────────────────────────────────
+
 class _SplinePolygonHandler:
+    """
+    Spline 交互 handler。
+    单击添加点，双击结束标注。
+    点击已有控制点进入移动模式，再次点击放置。
+    """
+
     def __init__(self, ortho_viewer, vt, annotations):
         self.ortho  = ortho_viewer
         self.vt     = vt
         self.annots = annotations
+
         self._picker = vtk.vtkCellPicker()
         self._picker.SetTolerance(0.001)
+
         self._drawing         = False
         self._ctrl_pts        = []
         self._preview_actor   = None
         self._preview_pts     = None
         self._preview_poly    = None
         self._last_click_time = 0
+
         self._moving_handle_ann = None
         self._moving_handle_idx = -1
         self._selected_ann      = None
+
+    # ── 事件 ─────────────────────────────────────────────────────────────────
 
     def on_press(self, caller, ev):
         import time
         world = self._pick(caller)
         if world is None:
             return
+
         now = time.time() * 1000
         is_double = (now - self._last_click_time) < _DOUBLE_CLICK_MS
         self._last_click_time = now
+
+        # 1. 正在移动控制点 -> 放置到当前位置，结束移动，重算统计
         if self._moving_handle_ann is not None:
             self._moving_handle_ann.ctrl_pts[self._moving_handle_idx] = world
-            self._moving_handle_ann.update_geometry()
+            self._moving_handle_ann.update_geometry(recalc_stats=True)
             self._moving_handle_ann = None
             self._moving_handle_idx = -1
             self._render()
             return
+
+        # 2. 双击 -> 结束当前标注
         if is_double and self._drawing:
             self._finish()
             return
+
+        # 3. 命中控制点 -> 进入移动模式
         for ann in reversed(self._visible_annots()):
             hi = ann.handle_hit(world)
             if hi >= 0:
@@ -240,11 +279,15 @@ class _SplinePolygonHandler:
                 self._moving_handle_idx = hi
                 self._selected_ann = ann
                 return
+
+        # 4. 绘制中：添加点
         if self._drawing:
             self._ctrl_pts.append(world)
             self._update_preview()
             self._render()
             return
+
+        # 5. 开始新标注
         self._drawing = True
         self._ctrl_pts = [world]
         self._selected_ann = None
@@ -255,19 +298,23 @@ class _SplinePolygonHandler:
         world = self._pick(caller)
         if world is None:
             return
+
+        # 移动控制点模式：实时跟随鼠标，不重算统计
         if self._moving_handle_ann is not None:
             self._moving_handle_ann.ctrl_pts[self._moving_handle_idx] = world
-            self._moving_handle_ann.update_geometry()
+            self._moving_handle_ann.update_geometry(recalc_stats=False)
             self._render()
             return
+
         if self._drawing and self._ctrl_pts:
             self._update_preview(cursor=world)
             self._render()
             return
+
         caller.GetInteractorStyle().OnMouseMove()
 
     def on_release(self, caller, ev):
-        pass
+        pass  # 移动模式由点击触发，release 不做任何事
 
     def on_key(self, caller, ev):
         key = caller.GetKeySym()
@@ -300,11 +347,18 @@ class _SplinePolygonHandler:
     def on_slice_changed_qt(self, _=None):
         self._refresh_visibility()
 
+    # ── 内部 ─────────────────────────────────────────────────────────────────
+
     def _finish(self):
         self._clear_preview()
         if len(self._ctrl_pts) >= 2:
             depth_val = self._get_depth_val()
-            ann = SplineAnnotation(self._ctrl_pts, self.vt, self.ortho.viewer, self.ortho.viewer.GetSlice(), depth_val)
+            ann = SplineAnnotation(
+                self._ctrl_pts, self.vt,
+                self.ortho.viewer,
+                self.ortho.viewer.GetSlice(),
+                depth_val,
+            )
             self.annots.append(ann)
             self._selected_ann = ann
         self._drawing = False
@@ -324,7 +378,8 @@ class _SplinePolygonHandler:
         if self._preview_actor is not None:
             renderer.RemoveActor(self._preview_actor)
             self._preview_actor = None
-        self._preview_actor, self._preview_pts, self._preview_poly = _make_polyline_actor(spts, _COLOR_PREVIEW, lw=1.2, stipple=True)
+        self._preview_actor, self._preview_pts, self._preview_poly = \
+            _make_polyline_actor(spts, _COLOR_PREVIEW, lw=1.2, stipple=True)
         renderer.AddActor(self._preview_actor)
 
     def _clear_preview(self):
@@ -398,6 +453,8 @@ class _SplinePolygonHandler:
             pass
 
 
+# ── Manager 基类 ──────────────────────────────────────────────────────────────
+
 class _BaseROIManager:
     def __init__(self, view_model):
         self.view_model   = view_model
@@ -434,6 +491,7 @@ class _BaseROIManager:
                     pass
             else:
                 h = self._handlers[vt]
+
             iren = ortho.widget.GetRenderWindow().GetInteractor()
             ids = [
                 iren.AddObserver("LeftButtonPressEvent",   h.on_press,   1.0),

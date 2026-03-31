@@ -38,6 +38,7 @@ class ContrastService:
                 viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().SetWindowLevel(
                     ToolBarWidget.contrast_widget.window_width_slider.value(), ToolBarWidget.contrast_widget.window_level_slider.value())
             viewer.Render()
+        self._sync_pseudo_color_bars()
 
     def levelSliderValueChange(self):
         self.viewerXY = self.viewModel.AxialOrthoViewer.viewer
@@ -56,5 +57,20 @@ class ContrastService:
                 viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().SetWindowLevel(
                     ToolBarWidget.contrast_widget.window_width_slider.value(), ToolBarWidget.contrast_widget.window_level_slider.value())
             viewer.Render()
+        self._sync_pseudo_color_bars()
+
+    def _sync_pseudo_color_bars(self):
+        """窗宽/窗位变化时同步更新三个视图的伪彩条"""
+        w = ToolBarWidget.contrast_widget.window_width_slider.value()
+        l = ToolBarWidget.contrast_widget.window_level_slider.value()
+        for ortho in [self.viewModel.AxialOrthoViewer,
+                      self.viewModel.SagittalOrthoViewer,
+                      self.viewModel.CoronalOrthoViewer]:
+            try:
+                bar = getattr(ortho, 'pseudo_color_bar', None)
+                if bar is not None:
+                    bar.update_window_level(w, l)
+            except Exception:
+                pass
 
 

@@ -994,7 +994,60 @@ class MenuBarService:
         if getattr(ortho_viewer, 'playback_controller', None) is not None:
             ortho_viewer.playback_controller.on_data_loaded()
 
+        # 更新伪彩条的 renderer（viewer 重建后 renderer 也变了）
+        self._refresh_pseudo_color_bar(ortho_viewer, viewer)
+
         return focalPoint, position
+
+    def _refresh_pseudo_color_bar(self, ortho_viewer, viewer):
+        """数据重载后，把伪彩条迁移到新的 renderer 上，并注册窗宽窗位联动"""
+        try:
+            bar = getattr(ortho_viewer, 'pseudo_color_bar', None)
+            if bar is None:
+                return
+            # 从旧 renderer 移除
+            try:
+                bar.remove()
+            except Exception:
+                pass
+            # 重建到新 renderer
+            from src.widgets.PseudoColorBar import PseudoColorBar
+            new_bar = PseudoColorBar(viewer.GetRenderer())
+            # 保持原来的可见性和调色板
+            new_bar._palette  = bar._palette
+            new_bar._visible  = bar._visible
+            new_bar._window   = bar._window
+            new_bar._level    = bar._level
+            if bar._visible:
+                new_bar.set_visible(True)
+            ortho_viewer.pseudo_color_bar = new_bar
+            # 同步到 playback_bar
+            pb = getattr(ortho_viewer, 'playback_bar', None)
+            if pb is not None:
+                pb.set_pseudo_color_bar(new_bar)
+
+            # 注册 WindowLevelEvent 观察者，鼠标拖动调整对比度时同步伪彩条
+            self._register_window_level_observer(viewer, new_bar)
+        except Exception:
+            logger.debug("_refresh_pseudo_color_bar error", exc_info=True)
+
+    def _register_window_level_observer(self, viewer, bar):
+        """在 viewer 的 interactor style 上注册 WindowLevelEvent，同步伪彩条"""
+        try:
+            def _on_window_level(caller, ev):
+                try:
+                    w = viewer.GetColorWindow()
+                    l = viewer.GetColorLevel()
+                    bar.update_window_level(w, l)
+                    viewer.GetRenderWindow().Render()
+                except Exception:
+                    pass
+
+            style = viewer.GetInteractorStyle()
+            if style is not None:
+                style.AddObserver("WindowLevelEvent", _on_window_level)
+        except Exception:
+            logger.debug("_register_window_level_observer error", exc_info=True)
 
     def clear_mousewheel_forward_backward_event(self, viewer_list):
         try:

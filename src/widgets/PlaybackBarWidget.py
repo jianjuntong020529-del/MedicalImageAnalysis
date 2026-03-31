@@ -108,6 +108,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_stop  = self._make_btn()
         self._btn_speed = self._make_btn()
         self._btn_loop  = self._make_btn()
+        self._btn_lut   = self._make_btn()   # 伪彩条开关
 
         self._btn_prev.setToolTip("上一帧")
         self._btn_play.setToolTip("播放 / 暂停")
@@ -115,6 +116,7 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_stop.setToolTip("停止")
         self._btn_speed.setToolTip("速率设置")
         self._btn_loop.setToolTip("循环播放")
+        self._btn_lut.setToolTip("伪彩条")
 
         # 收起按钮放在工具栏最右侧
         self._btn_collapse = self._make_btn()
@@ -123,7 +125,7 @@ class PlaybackBar(QtWidgets.QWidget):
 
         for btn in [self._btn_prev, self._btn_play, self._btn_next,
                     self._btn_stop, self._btn_speed, self._btn_loop,
-                    self._btn_collapse]:
+                    self._btn_lut, self._btn_collapse]:
             bar_layout.addWidget(btn)
 
         self._bar.adjustSize()
@@ -170,6 +172,29 @@ class PlaybackBar(QtWidgets.QWidget):
             lambda: self._controller.open_settings_dialog(parent=self)
         )
 
+        # ── 调色板菜单 ────────────────────────────────────────────────────────
+        self._lut_menu = QtWidgets.QMenu(self)
+        self._lut_menu.setStyleSheet("""
+            QMenu {
+                background-color: rgba(30,30,30,230);
+                color: white;
+                border: 1px solid rgba(255,255,255,50);
+                border-radius: 4px;
+            }
+            QMenu::item { padding: 4px 20px; }
+            QMenu::item:selected { background-color: rgba(255,255,255,40); }
+            QMenu::item:checked  { color: #4fc3f7; }
+        """)
+        self._lut_actions = {}
+        from src.widgets.PseudoColorBar import PALETTES
+        for name in PALETTES:
+            action = self._lut_menu.addAction(name)
+            action.setCheckable(True)
+            self._lut_actions[name] = action
+        self._lut_actions["Gray"].setChecked(True)
+
+        self._pseudo_color_bar = None   # 由外部注入（set_pseudo_color_bar）
+
         self.adjustSize()
 
     def _make_btn(self) -> QtWidgets.QPushButton:
@@ -200,6 +225,10 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_speed.setIcon(_draw_speed_icon(c))
         self._btn_loop.setIcon(_colorize_icon(self._ICON_LOOP,  lc))
 
+        # LUT 按钮：用调色板图标（SP_DialogResetButton 近似）
+        lut_color = QtGui.QColor(79, 195, 247) if (self._pseudo_color_bar and self._pseudo_color_bar._visible) else c
+        self._btn_lut.setIcon(_colorize_icon(QtWidgets.QStyle.SP_DialogResetButton, lut_color))
+
         # 收起/展开按钮始终白色
         collapse_icon = _colorize_icon(QtWidgets.QStyle.SP_TitleBarMinButton,
                                        _COLOR_ACTIVE)
@@ -216,6 +245,11 @@ class PlaybackBar(QtWidgets.QWidget):
         self._btn_stop.clicked.connect(self._controller.on_stop)
         self._btn_speed.clicked.connect(self._show_speed_menu)
         self._btn_loop.clicked.connect(self._controller.toggle_loop)
+        self._btn_lut.clicked.connect(self._on_lut_clicked)
+        self._btn_lut.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self._btn_lut.customContextMenuRequested.connect(
+            lambda: self._on_lut_right_clicked()
+        )
         self._btn_collapse.clicked.connect(self.collapse)
 
         for name, action in self._speed_actions.items():
@@ -237,6 +271,51 @@ class PlaybackBar(QtWidgets.QWidget):
         # 提取 FPS 对应的预设 key
         key_map = {"慢速 (5 FPS)": "慢速", "标准 (15 FPS)": "标准", "快速 (30 FPS)": "快速"}
         self._controller.set_speed(key_map.get(name, "标准"))
+
+    def _on_lut_clicked(self):
+        """左键点击：切换伪彩条显示/隐藏；右键：弹出调色板菜单"""
+        if self._pseudo_color_bar is None:
+            return
+        visible = self._pseudo_color_bar.toggle()
+        self._refresh_icons()   # 更新按钮高亮状态
+        self._render_vtk()
+
+    def _on_lut_right_clicked(self):
+        """右键点击：弹出调色板菜单"""
+        pos = self._btn_lut.mapToGlobal(QtCore.QPoint(0, self._btn_lut.height()))
+        self._lut_menu.exec_(pos)
+
+    def _on_palette_selected(self, name: str):
+        for n, action in self._lut_actions.items():
+            action.setChecked(n == name)
+        if self._pseudo_color_bar:
+            # 切换调色板时自动显示伪彩条
+            self._pseudo_color_bar.set_palette(name)
+            if not self._pseudo_color_bar._visible:
+                self._pseudo_color_bar.set_visible(True)
+                self._refresh_icons()
+            self._render_vtk()
+
+    def set_pseudo_color_bar(self, bar):
+        """注入 PseudoColorBar 实例"""
+        self._pseudo_color_bar = bar
+        # 断开旧连接（防止重复注册）
+        try:
+            self._lut_menu.triggered.disconnect()
+        except Exception:
+            pass
+        # 连接调色板菜单
+        for name, action in self._lut_actions.items():
+            action.triggered.connect(lambda checked, n=name: self._on_palette_selected(n))
+
+    def _render_vtk(self):
+        try:
+            # parent() 是 QVTKRenderWindowInteractor
+            rw = self.parent().GetRenderWindow()
+            if rw:
+                rw.Render()
+        except Exception:
+            pass
 
     # ── 公开接口 ──────────────────────────────────────────────────────────────
 
